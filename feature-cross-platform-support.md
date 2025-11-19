@@ -1,8 +1,13 @@
-# Feature: Cross-Platform Support (Tauri Native Shell)
+# Feature: Cross-Platform Support
 
 ## Overview
 
-Readest uses **Tauri v2** to provide native desktop application capabilities while sharing a single codebase with the web version. The Tauri shell provides filesystem access, native dialogs, window management, and platform-specific integrations. At commit `571baf98`, Tauri supports macOS, Windows, and Linux.
+Readest supports two deployment modes:
+
+1. **Native Applications** (via Tauri v2): Desktop apps for macOS, Windows, and Linux
+2. **Web Platform** (via Browser): Progressive Web App (PWA) running in modern browsers
+
+Both modes share the same Next.js codebase but use different service implementations (`NativeAppService` vs `WebAppService`) for platform-specific operations. **Web platform support was added in commit aa16bc09 (Dec 2024)**.
 
 ## Key Components
 
@@ -26,19 +31,30 @@ Readest uses **Tauri v2** to provide native desktop application capabilities whi
 
 **Environment Configuration** (`src/services/environment.ts`):
 ```typescript
-const environmentConfig: EnvConfigType = {
-  getAppService: async () => {
-    if (!appService) {
-      const { NativeAppService } = await import('@/services/nativeAppService');
-      appService = new NativeAppService();
-      await appService.loadSettings();
-    }
-    return appService;
-  },
+// Platform detection via environment variable
+export const isTauriAppPlatform = () =>
+  process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri';
+
+export const isWebAppPlatform = () =>
+  process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'web';
+
+// Service factory pattern
+export const getAppService = async () => {
+  if (isTauriAppPlatform()) {
+    const { NativeAppService } = await import('@/services/nativeAppService');
+    return new NativeAppService();
+  } else {
+    const { WebAppService } = await import('@/services/webAppService');
+    return new WebAppService();
+  }
 };
 ```
 
-At this commit, only native app is supported. The web version would use a different `WebAppService` implementation.
+**Environment Files:**
+- `.env.tauri`: Sets `NEXT_PUBLIC_APP_PLATFORM=tauri`
+- `.env.web`: Sets `NEXT_PUBLIC_APP_PLATFORM=web`
+
+Build system determines which service to use at compile time.
 
 ### Tauri Setup (`src-tauri/src/lib.rs`)
 
@@ -104,6 +120,161 @@ class NativeAppService extends AppService {
 - **@tauri-apps/plugin-dialog**: File picker dialogs
 - **@tauri-apps/plugin-os**: Platform detection, paths
 - **@tauri-apps/plugin-http**: HTTP requests (if needed)
+
+---
+
+## Web Platform Support (Added Dec 2024)
+
+### Web App Service (`src/services/webAppService.ts`)
+
+The web platform uses **IndexedDB** for persistent storage instead of the native filesystem.
+
+**Key Differences from Native:**
+
+| Feature | Web Platform | Native Platform |
+|---------|-------------|-----------------|
+| **File System** | IndexedDB (browser storage) | Tauri file system plugins |
+| **Storage Limit** | Browser quota (~500MB-5GB) | OS file system limits |
+| **File Selection** | Not supported (throws error) | Native file dialogs |
+| **Directory Selection** | Not supported | Supported via openDialog |
+| **Custom Root Directory** | Not supported | Supported (portable/sandboxed) |
+| **App Platform Flag** | `appPlatform = 'web'` | `appPlatform = 'tauri'` |
+| **Window Controls** | Not rendered | Platform-specific controls |
+| **Auto Updater** | Not available | Full updater support |
+| **File Fetch** | Standard `fetch()` | Tauri HTTP plugin |
+
+**IndexedDB Structure:**
+```typescript
+// Database: AppFileSystem
+// Store: files
+// Key: path (e.g., "Readest/Books/book.epub")
+// Value: { path, content: ArrayBuffer | string }
+
+// Virtual directories:
+// - Readest/Books
+// - Readest/Fonts
+// - Readest/Images
+// - Readest/Data
+```
+
+**File Operations:**
+```typescript
+class WebAppService extends BaseAppService {
+  // Read from IndexedDB
+  async readFile(path: string, base: BaseDir): Promise<ArrayBuffer> {
+    const db = await openIndexedDB();
+    const file = await db.get('files', path);
+    return file.content;
+  }
+
+  // Write to IndexedDB
+  async writeFile(path: string, content: ArrayBuffer | string, base: BaseDir) {
+    const db = await openIndexedDB();
+    await db.put('files', { path, content });
+  }
+
+  // Not supported operations (throw errors):
+  async selectFiles() {
+    throw new Error('File selection not supported in browser');
+  }
+
+  async selectDirectory() {
+    throw new Error('Directory selection not supported in browser');
+  }
+}
+```
+
+### PWA Support
+
+**Detection:**
+```typescript
+export const isPWA = () =>
+  window.matchMedia('(display-mode: standalone)').matches;
+```
+
+**PWA Features:**
+- Installable from browser
+- Offline support (via service worker)
+- Safe area insets (like native apps)
+- Add to home screen (mobile)
+
+**Service Worker** (Next.js PWA plugin):
+- Caches static assets
+- Provides offline fallback
+- Pre-caches book files for offline reading
+
+### Platform-Specific UI
+
+**Components with Platform Detection:**
+- `LibraryHeader.tsx`: Shows "Download Readest" button on web
+- `WindowButtons.tsx`: Only renders on Tauri
+- `UpdaterWindow.tsx`: Only on Tauri
+- `BookMenu.tsx`: Different options for web vs native
+
+**Example Platform-Specific Rendering:**
+```typescript
+import { isTauriAppPlatform } from '@/services/environment';
+
+function LibraryHeader() {
+  return (
+    <header>
+      {isTauriAppPlatform() ? (
+        <WindowButtons />
+      ) : (
+        <a href="/download">Download Readest</a>
+      )}
+    </header>
+  );
+}
+```
+
+### URL Handling
+
+**Web Platform:**
+```typescript
+// Uses Blob URLs for local files
+getURL(path: string) {
+  if (isValidURL(path)) return path;
+  return URL.createObjectURL(new Blob([content]));
+}
+```
+
+**Native Platform:**
+```typescript
+// Uses Tauri's convertFileSrc for file:// URLs
+getURL(path: string) {
+  return isValidURL(path) ? path : convertFileSrc(path);
+}
+```
+
+### Remote File Support
+
+Both platforms support loading books from URLs:
+```typescript
+async openFile(path: string, base: BaseDir) {
+  if (isValidURL(path)) {
+    return await new RemoteFile(path, filename).open();
+  }
+  // Platform-specific file loading (IndexedDB or FS)
+}
+```
+
+### Deployment
+
+**Web Platform:**
+```bash
+# Build for web
+NEXT_PUBLIC_APP_PLATFORM=web pnpm build
+
+# Deploy to Vercel/Netlify/etc.
+pnpm deploy
+```
+
+**Native Platform:**
+```bash
+# Build for Tauri
+pnpm tauri build
+```
 
 ### Menu Integration
 
