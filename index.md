@@ -1,7 +1,7 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commit `571baf98` (Add About Readest window)
-**Last Updated**: November 2024
+**Version**: Documentation for commits `571baf98` through `a23447a8` (up to 0.8.5 release)
+**Last Updated**: December 2024
 
 ## Introduction
 
@@ -58,12 +58,13 @@ Each feature document contains:
 | Feature | File | Description |
 |---------|------|-------------|
 | **Document Reading Engine** | [feature-document-reading-engine.md](./feature-document-reading-engine.md) | EPUB/PDF/MOBI/CBZ/FB2 support, format detection, book loading |
-| **Annotation System** | [feature-annotation-system.md](./feature-annotation-system.md) | Highlighting, notes, translation, dictionary integration |
+| **Annotation System** | [feature-annotation-system.md](./feature-annotation-system.md) | Highlighting, notes, translation, dictionary integration, **popover footnotes** |
 | **Sidebar Navigation** | [feature-sidebar-navigation.md](./feature-sidebar-navigation.md) | TOC, search, bookmarks, booknotes views |
 | **Settings System** | [feature-settings-system.md](./feature-settings-system.md) | Three-tier settings hierarchy (global/book/view) |
 | **State Management** | [feature-state-management.md](./feature-state-management.md) | Zustand stores architecture and patterns |
 | **Library Management** | [feature-library-management.md](./feature-library-management.md) | Book import/export, metadata, cover handling |
-| **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, platform-specific code |
+| **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, **web platform support**, platform-specific code |
+| **Authentication & Sync** | [feature-auth-sync.md](./feature-auth-sync.md) | **NEW**: User accounts, OAuth, cloud sync for progress and notes |
 
 ## Common Tasks Quick Reference
 
@@ -385,6 +386,53 @@ Add the new file to the "Feature Documentation" table above.
 ### I need to add a new feature
 → Review relevant feature docs, consult [source-code-tree.md](./source-code-tree.md) for file organization, follow existing patterns in [feature-state-management.md](./feature-state-management.md)
 
+### I need to work with user authentication or cloud sync
+→ See [feature-auth-sync.md](./feature-auth-sync.md)
+
+## What's New (571baf98 → a23447a8)
+
+### Major Features Added
+
+1. **Authentication and Cloud Sync** (Dec 16-24, 2024)
+   - User authentication via OAuth (Google, Apple, GitHub)
+   - Cloud sync for reading progress across devices
+   - Cloud sync for annotations and notes
+   - Supabase backend integration
+   - **See**: [feature-auth-sync.md](./feature-auth-sync.md)
+
+2. **Web Platform Support** (Dec 5, 2024)
+   - Browser-based PWA version of Readest
+   - IndexedDB for client-side storage
+   - Service worker for offline support
+   - Platform detection and service abstraction
+   - **See**: [feature-cross-platform-support.md](./feature-cross-platform-support.md)
+
+3. **Popover Footnotes** (Dec 10, 2024)
+   - Inline footnote popups without navigation
+   - Vertical writing mode support (CJK languages)
+   - Responsive positioning and sizing
+   - Nested FoliateView rendering
+   - **See**: [feature-annotation-system.md](./feature-annotation-system.md) (Popover Footnotes section)
+
+4. **File Associations & Auto-Updater** (Dec 3, 2024)
+   - "Open with Readest" system integration
+   - Auto-update functionality for desktop apps
+   - Command-line argument support
+   - **See**: [feature-cross-platform-support.md](./feature-cross-platform-support.md)
+
+### Enhancements
+
+- Custom CSS support for non-ASCII characters
+- Demo library with Feedbooks integration
+- Improved OAuth handling on native platforms
+- Various annotation and PDF improvements
+- Enhanced dark mode support
+- Better scrollbar handling across platforms
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
 ---
 
-**For any questions or issues with this documentation, please consult the commit history around `571baf98` for context on the codebase state at this point.**
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `a23447a8` for context on the codebase state at this point.**
