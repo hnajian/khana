@@ -1,7 +1,7 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `d757555f` (0.8.5 → 0.9.7 releases)
-**Last Updated**: January 2025
+**Version**: Documentation for commits `571baf98` through `cab757257` (0.8.5 → 0.9.18 releases)
+**Last Updated**: February 2025
 
 ## Introduction
 
@@ -539,4 +539,73 @@ None - all changes are backward compatible
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `d757555f` for context on the codebase state at this point.**
+## Version 0.9.8 - 0.9.18 Updates (d757555f → cab757257)
+
+### Major Features Added (Jan 23 - Feb 26, 2025)
+
+1. **Library Groups** (v0.9.11, #368)
+   - Organize books into custom groups/shelves
+   - Nested group support
+   - Drag-and-drop organization
+   - Visual group indicators
+   - **See**: [feature-library-management.md](./feature-library-management.md) (Library Groups section)
+
+2. **User Profile Management** (v0.9.17, #452)
+   - Dedicated user profile page at `/profile`
+   - Self-service account deletion
+   - Profile customization (display name, avatar)
+   - Subscription status display
+   - **See**: [feature-auth-sync.md](./feature-auth-sync.md) (User Profile section)
+
+3. **iOS Native Features** (v0.9.11-0.9.18)
+   - Native Sign in with Apple (#411)
+   - Haptics feedback for interactions (#428)
+   - iOS-optimized modals and annotation tools (#447)
+   - Paging animations enabled by default (#410)
+   - Safari-auth plugin for native OAuth (#433, #443)
+   - **See**: [feature-cross-platform-support.md](./feature-cross-platform-support.md) (iOS Platform Optimizations)
+
+4. **Keyboard Shortcuts** (v0.9.11-0.9.16)
+   - Annotation shortcuts (H, N, D, C, T, W, S) (#378)
+   - Half-page navigation (d/u keys) (#437)
+   - Select mode toggle and quit app in library (#438)
+   - Consistent keyboard UI with `<kbd>` tags (#421)
+   - **See**: [feature-annotation-system.md](./feature-annotation-system.md) (Keyboard Shortcuts)
+
+5. **Mobile UI Enhancements** (v0.9.11-0.9.17)
+   - Transient auto-hiding toolbars (#394)
+   - Pull-down gesture to dismiss modals (#440)
+   - Grid view optimizations for mobile (#379)
+   - Responsive font sizes for book notes (#415, #416)
+   - Improved iPad detection and layouts (#416)
+   - **See**: [feature-cross-platform-support.md](./feature-cross-platform-support.md) (Mobile UI Patterns)
+
+6. **Arabic Language Support** (v0.9.15, #432)
+   - Full RTL (right-to-left) layout support
+   - Complete Arabic translations (115+ keys)
+   - Dynamic UI direction switching
+   - 15 languages now supported
+   - **See**: [feature-internationalization.md](./feature-internationalization.md)
+
+7. **Docker Self-Hosting** (v0.9.14, #430)
+   - Official Dockerfile for self-hosted deployments
+   - Docker Compose configuration
+   - Environment variable management
+   - Easier self-hosting for privacy-conscious users
+
+### Enhancements (0.9.8 - 0.9.18 Period)
+
+- **Settings**: Keep screen awake option during reading (#403)
+- **Annotations**: Less saturated highlight colors for better readability (#453)
+- **TTS**: Normalized language codes for better voice matching (#457)
+- **UI**: Popup and dialog style improvements (#448)
+- **Compatibility**: Fixed PDF TOC rendering (#402), footnote display (#400), font override issues (#422)
+- **Navigation**: Preserve note ID when editing annotations (#436)
+- **Alerts**: Improved positioning and z-index handling (#387, #390)
+
+### Breaking Changes
+None - all changes are backward compatible
+
+---
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `cab757257` for context on the codebase state at this point.**

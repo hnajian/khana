@@ -8,32 +8,52 @@
 
 The Internationalization (i18n) feature enables Readest to support multiple languages, making the app accessible to users worldwide. The system uses **i18next** framework with automatic language detection, persistent user preferences, and comprehensive translation coverage across all UI components.
 
-### Supported Languages
+### Supported Languages (Updated v0.9.15)
 
-Readest supports 14 languages with full translation coverage:
+Readest supports 15 languages with full translation coverage:
 
-| Language | Code | Status |
-|----------|------|--------|
-| English | `en` | Default/Fallback |
-| German | `de` | ✅ Complete |
-| Spanish | `es` | ✅ Complete |
-| French | `fr` | ✅ Complete |
-| Italian | `it` | ✅ Complete |
-| Japanese | `ja` | ✅ Complete |
-| Korean | `ko` | ✅ Complete |
-| Portuguese | `pt` | ✅ Complete |
-| Russian | `ru` | ✅ Complete |
-| Turkish | `tr` | ✅ Complete |
-| Vietnamese | `vi` | ✅ Complete |
-| Indonesian | `id` | ✅ Complete |
-| Chinese (Simplified) | `zh-CN` | ✅ Complete |
-| Chinese (Traditional) | `zh-TW` | ✅ Complete |
+| Language | Code | Status | Added |
+|----------|------|--------|-------|
+| English | `en` | Default/Fallback | Initial |
+| German | `de` | ✅ Complete | v0.9.0 |
+| Spanish | `es` | ✅ Complete | v0.9.0 |
+| French | `fr` | ✅ Complete | v0.9.0 |
+| Italian | `it` | ✅ Complete | v0.9.0 |
+| Japanese | `ja` | ✅ Complete | v0.9.0 |
+| Korean | `ko` | ✅ Complete | v0.9.0 |
+| Portuguese | `pt` | ✅ Complete | v0.9.0 |
+| Russian | `ru` | ✅ Complete | v0.9.0 |
+| Turkish | `tr` | ✅ Complete | v0.9.0 |
+| Vietnamese | `vi` | ✅ Complete | v0.9.0 |
+| Indonesian | `id` | ✅ Complete | v0.9.0 |
+| Chinese (Simplified) | `zh-CN` | ✅ Complete | v0.9.0 |
+| Chinese (Traditional) | `zh-TW` | ✅ Complete | v0.9.0 |
+| **Arabic** | `ar` | ✅ Complete | **v0.9.15** (#432) |
 
 ### Additional Fallback Support
 
 **Regional variants** automatically fall back to related languages:
 - `zh-HK` (Hong Kong) → `zh-TW` → `en`
 - Central Asian languages (`kk`, `ky`, `tk`, `uz`, `ug`, `tt`) → `ru` → `en`
+
+### RTL (Right-to-Left) Language Support
+
+**Added**: v0.9.15 (Commit #432)
+
+Arabic is the first RTL language supported in Readest. The UI automatically adjusts layout direction based on the selected language.
+
+**Implementation**:
+- `dir="rtl"` applied to root HTML element when Arabic is selected
+- Mirror layout for sidebars, menus, modals
+- Text alignment switches to right-aligned
+- Icon positions flip for RTL context
+
+**Files Modified**:
+- `public/locales/ar/translation.json` - Arabic translations
+- `src/i18n/i18n.ts` - RTL detection logic
+- `src/app/layout.tsx` - Dynamic `dir` attribute
+
+**Future RTL Languages**: Hebrew and other RTL languages can be added following the same pattern established for Arabic.
 
 ## Architecture
 
