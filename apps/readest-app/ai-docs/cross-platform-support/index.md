@@ -4,16 +4,15 @@
 
 Readest supports two deployment modes:
 
-## Sub-Features
-
-- **[Progressive Web App (PWA) Enhancements](./pwa-enhancements.md)** - PWA capabilities added in January 2025
-
-
 1. **Native Applications** (via Tauri v2): Desktop apps for macOS, Windows, and Linux
 2. **Web Platform** (via Browser): Progressive Web App (PWA) running in modern browsers
 
 Both modes share the same Next.js codebase but use different service implementations (`NativeAppService` vs `WebAppService`) for platform-specific operations. **Web platform support was added in commit aa16bc09 (Dec 2024)**.
 
+## Sub-Features
+
+- **[Progressive Web App (PWA) Enhancements](./pwa-enhancements.md)** - PWA capabilities added in January 2025
+- 
 ## Key Components
 
 ### Primary Files
