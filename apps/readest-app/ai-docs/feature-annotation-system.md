@@ -93,14 +93,18 @@ The annotation system interacts with foliate-js through:
    - `view.deleteAnnotation(id)`: Remove highlight
    - `view.getCFI()`: Get current selection CFI
 
-### Highlight Color System
+### Highlight Color System (Updated v0.9.17)
 
-Predefined colors in `HighlightOptions.tsx`:
-- Yellow (default)
-- Green
-- Blue
-- Pink
-- Purple
+Predefined colors in `HighlightOptions.tsx` updated in commit #453 with less saturated, modern palette:
+
+**Current Colors** (as of v0.9.17):
+- Yellow: `#FFF9C4` (previously `#ffeb3b` - less saturated for better readability)
+- Green: `#C8E6C9` (previously `#4caf50`)
+- Blue: `#BBDEFB` (previously `#2196f3`)
+- Pink: `#F8BBD0` (previously `#e91e63`)
+- Purple: `#E1BEE7` (previously `#9c27b0`)
+
+**Rationale**: Improved readability with lower saturation values, better contrast for both light and dark themes, reduced eye strain during extended reading sessions.
 
 Colors are applied as semi-transparent overlays on the text.
 
@@ -248,6 +252,110 @@ For books with complex layouts (e.g., fixed-layout EPUBs):
 2. **Position recalculation**:
    - Implement logic to recalculate positions on layout changes
    - Store additional metadata for recovery
+
+---
+
+## Keyboard Shortcuts for Annotations (Added v0.9.11)
+
+### Overview
+Commit #378 added keyboard shortcuts for quick access to annotation features, significantly improving reading workflow efficiency.
+
+### Available Shortcuts
+
+| Shortcut | Action | Context | Added |
+|----------|--------|---------|-------|
+| `H` | Toggle highlight | Text selected | v0.9.11 |
+| `N` | Add/edit note | Text selected or highlight clicked | v0.9.11 |
+| `D` | Delete highlight | Highlight clicked | v0.9.11 |
+| `C` | Copy to notebook | Text selected | v0.9.11 |
+| `T` | Translate selection | Text selected | v0.9.11 |
+| `W` | Wikipedia lookup | Text selected | v0.9.11 |
+| `S` | Text-to-speech | Text selected | v0.9.11 |
+
+### Implementation
+
+**Location**: `src/app/reader/components/annotator/Annotator.tsx`
+
+**Event Handler**:
+```typescript
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (!showAnnotPopup) return;
+
+    switch (e.key.toLowerCase()) {
+      case 'h':
+        handleHighlight();
+        break;
+      case 'n':
+        handleAddNote();
+        break;
+      case 'd':
+        handleDeleteHighlight();
+        break;
+      case 'c':
+        handleCopyToNotebook();
+        break;
+      case 't':
+        handleTranslate();
+        break;
+      case 'w':
+        handleWikipediaLookup();
+        break;
+      case 's':
+        handleTextToSpeech();
+        break;
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [showAnnotPopup]);
+```
+
+### Visual Indicators
+
+Keyboard shortcuts are displayed in the UI using `<kbd>` tags (commit #421):
+
+```typescript
+<button>
+  Highlight <kbd>H</kbd>
+</button>
+```
+
+This renders as a visually distinct keyboard key indicator, improving discoverability.
+
+### Customization
+
+**To add a new keyboard shortcut**:
+
+1. Add new case in `handleKeyDown`:
+   ```typescript
+   case 'e':
+     handleExport();
+     break;
+   ```
+
+2. Update UI button to show shortcut:
+   ```typescript
+   <PopupButton onClick={handleExport}>
+     Export <kbd>E</kbd>
+   </PopupButton>
+   ```
+
+3. Document in shortcuts table above
+
+**To modify existing shortcuts**:
+
+1. Change the key in switch statement
+2. Update UI labels
+3. Test for conflicts with browser shortcuts (avoid Cmd/Ctrl combinations)
+
+### Accessibility
+
+- Shortcuts only active when annotation popup is visible
+- Non-conflicting with browser native shortcuts
+- Visual indicators help users discover shortcuts
+- Keyboard-only navigation fully supported
 
 ---
 
