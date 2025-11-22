@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Settings System in Readest implements a three-tier hierarchy: **Global Settings** < **Book Settings** < **View Settings**. This allows users to set default preferences globally while overriding them per-book or per-view. At commit `571baf98`, settings cover fonts, colors, layout, and miscellaneous reading preferences.
+The Settings System in Readest implements a three-tier hierarchy: **Global Settings** < **Book Settings** < **View Settings**. This allows users to set default preferences globally while overriding them per-book or per-view. At commit `d757555f`, settings cover fonts, colors, layout, and miscellaneous reading preferences.
 
 ## Key Components
 

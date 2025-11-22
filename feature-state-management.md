@@ -2,7 +2,7 @@
 
 ## Overview
 
-Readest uses **Zustand** for centralized state management, organizing application state into specialized stores. This architecture separates concerns and enables efficient reactivity across the UI. At commit `571baf98`, there are six primary stores managing different aspects of the application.
+Readest uses **Zustand** for centralized state management, organizing application state into specialized stores. This architecture separates concerns and enables efficient reactivity across the UI. At commit `d757555f`, there are seven primary stores managing different aspects of the application.
 
 ## Key Components
 
@@ -14,6 +14,7 @@ Readest uses **Zustand** for centralized state management, organizing applicatio
 - **`src/store/bookDataStore.ts`** - Loaded book data and configurations
 - **`src/store/notebookStore.ts`** - Annotations, highlights, and notes
 - **`src/store/sidebarStore.ts`** - Sidebar UI state and navigation
+- **`src/store/parallelViewStore.ts`** - Parallel view synchronization groups
 
 ## Architecture
 
@@ -189,6 +190,54 @@ interface SidebarStore {
   // ...
 }
 ```
+
+#### 7. Parallel View Store (`parallelViewStore.ts`)
+
+**Purpose**: Manages parallel reading view groups for synchronized multi-book reading
+
+**Key State**:
+```typescript
+interface ParallelViewState {
+  parallelViews: Set<string>[];              // Array of parallel view groups
+  setParallel: (bookKeys: string[]) => void; // Group views as parallel
+  unsetParallel: (bookKeys: string[]) => void; // Ungroup views
+  areParallels: (bookKey1: string, bookKey2: string) => boolean; // Check if two views are parallel
+  getParallels: (bookKey: string) => Set<string> | null; // Get all parallels for a view
+}
+```
+
+**Functionality**:
+- **Parallel Groups**: Maintains multiple sets of book views that should scroll/navigate in sync
+- **Dynamic Grouping**: Views can be added to groups dynamically during reading sessions
+- **Group Merging**: Automatically merges groups when a view belongs to multiple groups
+- **Auto-cleanup**: Removes groups with fewer than 2 members
+
+**Usage Pattern**:
+```typescript
+// Group two books for parallel reading
+setParallel(['book-hash-1-0', 'book-hash-2-0']);
+
+// Check if two views are synchronized
+const areSynced = areParallels('book-hash-1-0', 'book-hash-2-0'); // true
+
+// Get all parallel views for a book
+const parallels = getParallels('book-hash-1-0'); // Set(['book-hash-2-0'])
+
+// Remove a view from its group
+unsetParallel(['book-hash-1-0']);
+```
+
+**Use Cases**:
+- **Bilingual Reading**: Read original and translation side-by-side with synchronized scrolling
+- **Comparative Reading**: Compare different editions or versions of the same text
+- **Cross-referencing**: Navigate multiple related books together
+- **Study Mode**: Keep reference materials synchronized with primary text
+
+**Implementation Details**:
+- Groups stored as `Set<string>[]` for efficient membership checks
+- Book keys follow format: `{bookHash}-{viewIndex}`
+- Groups automatically merge when views have overlapping memberships
+- Empty or single-member groups are automatically removed
 
 ### Store Interactions
 

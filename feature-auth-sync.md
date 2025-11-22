@@ -682,5 +682,5 @@ CREATE INDEX idx_notes_updated ON book_notes(updated_at);
 
 ---
 
-**Last Updated:** Documentation for commits up to a23447a8 (Dec 2024)
+**Last Updated:** Documentation for commits up to d757555f
 **Related Documents:** [feature-cross-platform-support.md](./feature-cross-platform-support.md), [feature-library-management.md](./feature-library-management.md)
