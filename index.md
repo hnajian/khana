@@ -1,7 +1,7 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `a23447a8` (up to 0.8.5 release)
-**Last Updated**: December 2024
+**Version**: Documentation for commits `571baf98` through `76c5f585` (0.8.5 → 0.9.0 releases)
+**Last Updated**: January 2025
 
 ## Introduction
 
@@ -64,7 +64,8 @@ Each feature document contains:
 | **State Management** | [feature-state-management.md](./feature-state-management.md) | Zustand stores architecture and patterns |
 | **Library Management** | [feature-library-management.md](./feature-library-management.md) | Book import/export, metadata, cover handling |
 | **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, **web platform support**, platform-specific code |
-| **Authentication & Sync** | [feature-auth-sync.md](./feature-auth-sync.md) | **NEW**: User accounts, OAuth, cloud sync for progress and notes |
+| **Authentication & Sync** | [feature-auth-sync.md](./feature-auth-sync.md) | User accounts, OAuth, cloud sync for progress and notes |
+| **Internationalization** | [feature-internationalization.md](./feature-internationalization.md) | **NEW**: 14 languages, i18next framework, translation management |
 
 ## Common Tasks Quick Reference
 
@@ -435,4 +436,50 @@ None - all changes are backward compatible
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `a23447a8` for context on the codebase state at this point.**
+## Version 0.9.0 Updates (a23447a8 → 76c5f585)
+
+### Major Features Added (Dec 25, 2024 - Jan 5, 2025)
+
+1. **Internationalization (i18n)** (Dec 26, 2024)
+   - 14 language support with full translations
+   - i18next framework with automatic language detection
+   - Translation extraction and management tools
+   - Persistent language preferences
+   - **See**: [feature-internationalization.md](./feature-internationalization.md)
+
+2. **Custom CSS Editor Improvements** (Jan 3, 2025)
+   - Draft-based editing with explicit Apply button
+   - Advanced CSS validation with detailed error messages
+   - Better UX with clear save workflow
+   - **See**: [feature-settings-system.md](./feature-settings-system.md) (Custom CSS Editor section)
+
+3. **Vertical/Horizontal Layout Switch** (Jan 3, 2025)
+   - Manual override for CJK book text direction
+   - Three modes: Auto, Horizontal, Vertical
+   - Per-book persistence
+   - **See**: [feature-settings-system.md](./feature-settings-system.md) (Vertical/Horizontal Layout section)
+
+4. **Deep Linking for OAuth** (Jan 3-4, 2025)
+   - Native deep link support for OAuth callbacks
+   - Improved authentication flow on desktop apps
+   - Better Windows OAuth handling
+
+5. **Window Position Persistence** (Jan 5, 2025)
+   - Saves and restores window size and position
+   - Cross-platform support
+
+### Enhancements (0.9.0 Period)
+
+- Release notes display in auto updater
+- Book details modal with information display
+- Context menu on book covers (Tauri apps)
+- Bookmark and bootnote restoration fixes
+- CLI interface improvements (`readest` binary name)
+- Improved dark mode CSS support
+- Multiple keyboard shortcuts added
+- Enhanced translations and i18n coverage
+- Windows portable binaries
+
+---
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `76c5f585` for context on the codebase state at this point.**

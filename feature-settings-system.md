@@ -399,3 +399,148 @@ To allow users to backup/share settings:
 - **Batch updates**: Apply multiple setting changes in one operation
 - **Lazy load panels**: Only render active settings panel
 - **Memoize computations**: Use `useMemo` for derived settings values
+
+---
+
+## Custom CSS Editor Enhancements (Added Jan 2025)
+
+### Overview
+
+The Custom CSS editor received significant UX improvements in commit 2c9fe8e4, transforming it from an immediate-apply system to a draft-based editor with explicit validation and Apply button.
+
+**Location**: `src/app/reader/components/settings/MiscPanel.tsx` (Misc settings panel)
+
+### Key Improvements
+
+| Feature | Before | After |
+|---------|--------|-------|
+| **Validation** | Regex-based, limited errors | Dedicated `cssValidate()` utility with detailed errors |
+| **Application** | Immediate on every keystroke | Explicit "Apply" button |
+| **State Management** | Direct state updates | Draft state + saved state separation |
+| **Error Feedback** | Generic messages | Specific error messages per validation rule |
+| **UX** | Confusing immediate changes | Clear save workflow |
+
+### CSS Validation (`src/utils/css.ts`)
+
+**Validation Rules**:
+1. Comment removal (`/* ... */`)
+2. Brace balancing (`{` equals `}`)
+3. Rule structure (selector + declarations)
+4. Selector validation (non-empty)
+5. Declaration validation (non-empty)
+6. Property validation (proper format with colons)
+
+**Error Messages**:
+- "Empty CSS"
+- "Unbalanced curly braces"
+- "Invalid CSS structure"
+- "Missing selector"
+- "Missing declarations for selector: {selector}"
+- "Invalid property: {property}"
+
+### Usage Pattern
+
+```typescript
+const [draftStylesheet, setDraftStylesheet] = useState(userStylesheet);
+const [draftStylesheetSaved, setDraftStylesheetSaved] = useState(true);
+const [error, setError] = useState<string | null>(null);
+
+const handleUserStylesheetChange = (e) => {
+  const css = e.target.value;
+  setDraftStylesheet(css);
+  setDraftStylesheetSaved(false);
+  
+  const { isValid, error } = cssValidate(css);
+  setError(error);
+};
+
+const applyStyles = () => {
+  if (error) return;
+  
+  const formatted = cssbeautify(draftStylesheet, {
+    indent: '  ',
+    openbrace: 'end-of-line',
+  });
+  
+  setViewSettings({ userStylesheet: formatted });
+  setDraftStylesheet(formatted);
+  setDraftStylesheetSaved(true);
+};
+```
+
+### Button State Management
+
+- **Hidden**: When `draftStylesheetSaved === true` (no changes)
+- **Disabled**: When `error !== null` (validation failed)
+- **Enabled**: When changes exist and validation passes
+
+---
+
+## Vertical/Horizontal Layout Switch (Added Jan 2025)
+
+### Overview
+
+The vertical/horizontal layout switch (commit 3ad26d9d) allows users to manually override text direction for CJK (Chinese, Japanese, Korean) books.
+
+**Location**: `src/app/reader/components/settings/LayoutPanel.tsx` (Writing Mode section)
+
+### Writing Modes
+
+| Mode | Value | Description | Icon |
+|------|-------|-------------|------|
+| **Auto** | `'auto'` | Uses document's natural writing direction | `MdOutlineAutoMode` |
+| **Horizontal** | `'horizontal-tb'` | Forces horizontal text (left-to-right, top-to-bottom) | `MdOutlineTextRotationNone` |
+| **Vertical** | `'vertical-rl'` | Forces vertical text (right-to-left, top-to-bottom) | `MdOutlineTextRotationDown` |
+
+### Feature Characteristics
+
+**Visibility**: Only shown for CJK books (detected via language code)
+
+```typescript
+const langCode = getBookLangCode(bookData.bookDoc?.metadata?.language);
+const isCJKBook = langCode === 'zh' || langCode === 'ja' || langCode === 'ko';
+```
+
+**Type Definition**:
+
+```typescript
+export interface BookLayout {
+  writingMode: string; // 'auto' | 'horizontal-tb' | 'vertical-rl'
+  vertical: boolean;   // Auto-detected from document
+  // ... other properties
+}
+```
+
+**CSS Application** (`src/utils/style.ts`):
+
+```css
+html, body {
+  ${writingMode === 'auto' ? '' : `writing-mode: ${writingMode};`}
+}
+```
+
+### Differences from Existing `vertical` Property
+
+| Aspect | `vertical` (existing) | `writingMode` (new) |
+|--------|----------------------|---------------------|
+| **Source** | Auto-detected from document | User-controlled setting |
+| **Type** | Boolean | String enum |
+| **Purpose** | Layout calculations (e.g., footnote positioning) | Override document text direction |
+| **Persistence** | Not persisted | Saved per book |
+| **When Set** | On document load | User selection in settings |
+
+### Persistence
+
+- **Per-Book Only**: Not available in global settings
+- **Storage**: Saved in `BookConfig.viewSettings.writingMode`
+- **Default**: `'auto'` (defined in `src/services/constants.ts`)
+
+### Use Case
+
+Useful when:
+- Book has incorrect metadata about text direction
+- User prefers alternate reading direction (e.g., horizontal for traditionally vertical text)
+- Testing different reading modes for CJK content
+
+---
+
