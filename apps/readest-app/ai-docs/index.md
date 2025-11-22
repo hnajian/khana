@@ -606,6 +606,38 @@ None - all changes are backward compatible
 ### Breaking Changes
 None - all changes are backward compatible
 
+### Documentation in Progress
+
+The following feature sections are referenced above but have not yet been fully documented:
+
+1. **iOS Platform Optimizations** (feature-cross-platform-support.md)
+   - Native Sign in with Apple integration (#411)
+   - Haptics feedback system (#428)
+   - iOS-specific modals and annotation tools (#447)
+   - Paging animations configuration (#410)
+   - Safari-auth plugin for OAuth flow (#433, #443)
+
+2. **Mobile UI Patterns** (feature-cross-platform-support.md)
+   - Transient auto-hiding toolbar implementation (#394)
+   - Pull-down modal dismissal gestures (#440)
+   - Grid view mobile optimizations (#379)
+   - Responsive font sizing for book notes (#415, #416)
+   - iPad detection and responsive layouts (#416)
+
+3. **User Profile Management** (feature-auth-sync.md)
+   - Profile page architecture at `/profile` (#452)
+   - Self-service account deletion flow
+   - Profile customization features (display name, avatar)
+   - Subscription status display
+
+4. **Library Groups and Organization** (feature-library-management.md)
+   - Library groups data structure (#368)
+   - Nested group hierarchy
+   - Drag-and-drop organization UI
+   - Visual group indicators
+
+These sections will be added in future documentation updates.
+
 ---
 
 **For any questions or issues with this documentation, please consult the commit history from `571baf98` to `cab757257` for context on the codebase state at this point.**
