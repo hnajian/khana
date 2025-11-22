@@ -553,3 +553,525 @@ function closePopup() {
 - **Debounce saves**: Don't save on every keystroke in note editor
 - **Lazy load popups**: Dynamic import heavy components (e.g., DeepL API)
 - **Optimize re-renders**: Use React.memo for popup components
+
+---
+
+## Cloud Notes Synchronization (Added Dec 2024)
+
+### Overview
+
+The **Cloud Notes Synchronization** feature (commit 83cb7166 - Dec 24, 2024) enables automatic synchronization of annotations and notes across devices via Supabase cloud storage. This allows users to access their highlights, notes, and bookmarks from any device.
+
+### Key Components
+
+**Primary Files:**
+- **`src/app/reader/hooks/useNotesSync.ts`** - Hook for automatic notes synchronization
+- **`src/hooks/useSync.ts`** - Shared sync utilities
+- **`src/pages/api/sync.ts`** - Cloud sync API endpoint
+- **`src/utils/supabase.ts`** - Supabase client utilities
+- **`src/context/SyncContext.tsx`** - Cloud sync state context
+
+### Architecture
+
+**Sync Flow:**
+1. **User authenticates** via OAuth (see `src/app/auth/`)
+2. **On book open**, `useNotesSync` hook pulls latest notes from cloud
+3. **Local changes tracked** - New/modified annotations detected based on `updatedAt` timestamp
+4. **Periodic sync** - Notes automatically synced at regular intervals (SYNC_NOTES_INTERVAL_SEC)
+5. **Conflict resolution** - Merges local and remote notes, prioritizing newer timestamps
+6. **Soft deletes** - Deleted notes marked with `deletedAt` timestamp, synced across devices
+
+### Notes Sync Hook
+
+**`useNotesSync(bookKey: string)`**
+
+Automatically invoked in `Annotator.tsx:40` for every book:
+
+```typescript
+useNotesSync(bookKey);
+```
+
+**How it works:**
+
+1. **Initial Pull** (on mount):
+   ```typescript
+   useEffect(() => {
+     if (!user) return;
+     syncNotes([], bookHash, 'pull');
+   }, []);
+   ```
+   Downloads all existing notes for the book from cloud.
+
+2. **Change Detection**:
+   ```typescript
+   const getNewNotes = () => {
+     const bookNotes = config.booknotes ?? [];
+     const newNotes = bookNotes.filter(
+       (note) => lastSyncedAtNotes < note.updatedAt ||
+                 lastSyncedAtNotes < (note.deletedAt ?? 0)
+     );
+     return newNotes;
+   };
+   ```
+   Identifies notes modified since last sync.
+
+3. **Periodic Sync**:
+   - Syncs every `SYNC_NOTES_INTERVAL_SEC` seconds (default: configurable in constants)
+   - Uses debouncing to avoid excessive sync calls
+   - Mode: `'both'` (pushes local changes AND pulls remote changes)
+
+4. **Merge Strategy**:
+   ```typescript
+   const mergedNotes = [
+     ...oldNotes.filter((oldNote) =>
+       !newNotes.some((newNote) => newNote.id === oldNote.id)
+     ),
+     ...newNotes,
+   ];
+   ```
+   Remote notes override local notes with same ID.
+
+### Data Structure
+
+**BookNote Interface** (synchronized to cloud):
+```typescript
+interface BookNote {
+  id: string;                // Unique note ID
+  type: 'annotation' | 'excerpt' | 'bookmark';
+  cfi: string;               // EPUB CFI or PDF location
+  style?: 'highlight' | 'underline' | 'squiggly';
+  color?: string;            // Highlight color
+  text?: string;             // Selected text
+  note?: string;             // User's note
+  createdAt: number;         // Creation timestamp
+  updatedAt: number;         // Last modification timestamp
+  deletedAt?: number;        // Soft delete timestamp
+  bookHash: string;          // Book identifier (MD5)
+}
+```
+
+### Integration Points
+
+**Annotator Actions that Trigger Sync:**
+- **Highlight**: Creates annotation → triggers sync
+- **Annotate**: Adds note to annotation → triggers sync
+- **Copy**: Creates excerpt → triggers sync
+- **Delete Highlight**: Soft-deletes annotation (sets `deletedAt`) → triggers sync
+
+**Authentication Required:**
+- Notes sync only active when `user` is authenticated (via `useAuth()`)
+- Unauthenticated users store notes locally only
+- Upon login, local notes can be merged with cloud notes
+
+### Sync Timing
+
+**Constants** (from `src/services/constants.ts`):
+```typescript
+export const SYNC_NOTES_INTERVAL_SEC = 30;  // Sync every 30 seconds
+```
+
+**Debouncing Logic:**
+- If notes change within sync interval, sync is delayed
+- Prevents excessive API calls when user is actively annotating
+- Final sync occurs after user stops making changes
+
+### Cloud Storage
+
+**Supabase Backend:**
+- Notes stored in Supabase PostgreSQL database
+- Indexed by `bookHash` and `userId`
+- Real-time subscriptions possible (future enhancement)
+
+**API Endpoint** (`src/pages/api/sync.ts`):
+- POST `/api/sync` - Sync notes for a specific book
+- Request body: `{ bookHash, notes, lastSyncedAt }`
+- Response: `{ syncedNotes, lastSyncedAtNotes }`
+
+### Modification Guidelines for AI Agents
+
+#### Adjusting Sync Interval
+
+To change sync frequency:
+
+1. **Edit `src/services/constants.ts`**:
+   ```typescript
+   export const SYNC_NOTES_INTERVAL_SEC = 60;  // Sync every 60 seconds
+   ```
+
+2. **For immediate sync on every change**:
+   Modify `useNotesSync.ts` to sync in `useEffect` without debouncing.
+
+#### Adding Real-time Sync
+
+To implement real-time sync with Supabase subscriptions:
+
+1. **Subscribe to changes** in `useNotesSync.ts`:
+   ```typescript
+   useEffect(() => {
+     const subscription = supabase
+       .from('notes')
+       .on('INSERT', handleRemoteInsert)
+       .on('UPDATE', handleRemoteUpdate)
+       .on('DELETE', handleRemoteDelete)
+       .subscribe();
+
+     return () => subscription.unsubscribe();
+   }, [bookHash]);
+   ```
+
+2. **Handle remote changes**:
+   ```typescript
+   const handleRemoteInsert = (payload) => {
+     const newNote = payload.new;
+     if (newNote.bookHash === bookHash) {
+       // Merge into local notes
+       setConfig(bookKey, {
+         ...config,
+         booknotes: [...config.booknotes, newNote]
+       });
+     }
+   };
+   ```
+
+#### Sync Conflict Resolution
+
+Current strategy: **Last Write Wins** (remote notes override local with same ID)
+
+**Alternative strategies:**
+
+1. **Manual Conflict Resolution**:
+   ```typescript
+   if (localNote.updatedAt > remoteNote.updatedAt) {
+     // Keep local
+   } else if (remoteNote.updatedAt > localNote.updatedAt) {
+     // Keep remote
+   } else {
+     // Show conflict dialog to user
+     showConflictDialog(localNote, remoteNote);
+   }
+   ```
+
+2. **Merge Content**:
+   ```typescript
+   const mergedNote = {
+     ...localNote,
+     note: localNote.note + '\n---\n' + remoteNote.note,
+     updatedAt: Date.now(),
+   };
+   ```
+
+#### Offline Support
+
+Current implementation handles offline gracefully:
+- Notes saved locally when offline
+- Sync resumes when connection restored
+- Use `useSync()` hook's connection status
+
+**Enhancement: Sync Queue**:
+```typescript
+// In useNotesSync.ts
+const syncQueue = useRef<BookNote[]>([]);
+
+const queueNoteForSync = (note: BookNote) => {
+  syncQueue.current.push(note);
+  if (navigator.onLine) {
+    flushSyncQueue();
+  }
+};
+
+window.addEventListener('online', flushSyncQueue);
+```
+
+### Common Issues
+
+**Issue: Notes not syncing**
+- Check user is authenticated (`useAuth()`)
+- Verify `SYNC_NOTES_INTERVAL_SEC` constant
+- Inspect browser console for API errors
+- Check Supabase connection in `src/utils/supabase.ts`
+
+**Issue: Duplicate notes after sync**
+- Verify `id` field is unique per note
+- Check merge logic in `useNotesSync.ts:64-68`
+- Ensure `uniqueId()` generates globally unique IDs
+
+**Issue: Deleted notes reappearing**
+- Verify soft delete sets `deletedAt` timestamp
+- Check sync includes deleted notes (`getNewNotes()` filters)
+- Ensure cloud API respects `deletedAt` field
+
+**Issue: Sync too frequent / too slow**
+- Adjust `SYNC_NOTES_INTERVAL_SEC` in constants
+- Check debouncing logic in `useNotesSync.ts:36-57`
+- Monitor network tab for API call frequency
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `useNotesSync.ts:40` | Hook invocation in Annotator |
+| `useNotesSync.ts:17` | Initial pull on mount |
+| `useNotesSync.ts:42` | Periodic sync with debouncing |
+| `useNotesSync.ts:60` | Merge remote notes into local |
+| `useSync.ts:syncNotes` | Shared sync function |
+| `api/sync.ts` | Cloud API endpoint |
+| `constants.ts:SYNC_NOTES_INTERVAL_SEC` | Sync interval config |
+
+---
+
+## Text-to-Speech Integration (Added Jan 2025)
+
+### Overview
+
+The **Text-to-Speech (TTS) Integration** in the annotation system (commits 07b04b82, 74021412 - Jan 2025) allows users to listen to selected text using either Web Speech API or Microsoft Edge TTS service.
+
+### Key Components
+
+**Primary Files:**
+- **`src/app/reader/components/annotator/Annotator.tsx:339-343,358`** - "Speak" button handler
+- **`src/services/tts/TTSController.ts`** - TTS orchestration controller
+- **`src/services/tts/WebSpeechClient.ts`** - Web Speech API client
+- **`src/services/tts/EdgeTTSClient.ts`** - Edge TTS service client
+- **`src/utils/event.ts`** - Event dispatcher for TTS commands
+- **`src/utils/ssml.ts`** - SSML generation for TTS
+
+### Annotation Toolbar Integration
+
+**"Speak" Button** (8th tool in annotator toolbar):
+
+```typescript
+// From Annotator.tsx:358
+{ tooltipText: _('Speak'), Icon: FaHeadphones, onClick: handleSpeakText }
+```
+
+**Handler** (Annotator.tsx:339-343):
+```typescript
+const handleSpeakText = async () => {
+  if (!selection || !selection.text) return;
+  setShowAnnotPopup(false);
+  eventDispatcher.dispatch('tts-speak', { bookKey, range: selection.range });
+};
+```
+
+**Flow:**
+1. User **selects text** in book
+2. Annotation popup appears with 8 tools
+3. User clicks **"Speak"** button (headphones icon)
+4. `handleSpeakText()` dispatches `'tts-speak'` event
+5. TTS controller receives event and starts speaking
+
+### TTS Architecture
+
+**Two-tier TTS Backend:**
+
+1. **Web Speech API** (browser native):
+   - Free, built-in browser TTS
+   - Lower quality voices
+   - Limited voice options
+   - Works offline
+
+2. **Edge TTS** (Microsoft cloud service):
+   - High-quality neural voices
+   - Many voice options per language
+   - Requires internet connection
+   - Free (uses Microsoft Edge TTS API)
+
+**Dynamic Backend Selection:**
+- User selects voice in TTS panel
+- Controller automatically switches backend based on voice
+- Web Speech voices → WebSpeechClient
+- Edge TTS voices → EdgeTTSClient
+
+### Event-Driven Communication
+
+**TTS Events** (via `eventDispatcher`):
+
+| Event | Payload | Purpose |
+|-------|---------|---------|
+| `tts-speak` | `{ bookKey, range }` | Start speaking selected text |
+| `tts-play` | - | Resume playback |
+| `tts-pause` | - | Pause playback |
+| `tts-stop` | - | Stop playback |
+
+**Listening for Events:**
+```typescript
+// In TTSController or TTS components
+eventDispatcher.on('tts-speak', handleTTSSpeak);
+```
+
+### Text Processing
+
+**SSML Generation** (`src/utils/ssml.ts`):
+- Converts plain text to SSML (Speech Synthesis Markup Language)
+- Handles emphasis, pauses, pronunciation
+- Example:
+  ```xml
+  <speak>
+    <s>Hello, world!</s>
+    <break time="500ms"/>
+    <s>This is text to speech.</s>
+  </speak>
+  ```
+
+### Integration with Reading Flow
+
+**Coordinated with Reader:**
+- TTS can speak selected text (from annotation)
+- TTS can also speak entire sections (from reader controls)
+- Both use same TTS infrastructure
+- Selection-based speech is one-shot (doesn't continue to next section)
+
+### Modification Guidelines for AI Agents
+
+#### Adding Custom TTS Backend
+
+To add a new TTS service (e.g., Google TTS):
+
+1. **Create new client** `src/services/tts/GoogleTTSClient.ts`:
+   ```typescript
+   import { TTSClient } from './TTSClient';
+
+   export class GoogleTTSClient implements TTSClient {
+     async speak(text: string, voice: string): Promise<void> {
+       // Implement Google TTS API call
+     }
+
+     async getVoices(): Promise<Voice[]> {
+       // Fetch available voices
+     }
+   }
+   ```
+
+2. **Register in TTSController**:
+   ```typescript
+   // In TTSController.ts
+   const googleClient = new GoogleTTSClient();
+
+   const selectBackend = (voice: string) => {
+     if (voice.startsWith('google-')) return googleClient;
+     if (voice.startsWith('edge-')) return edgeClient;
+     return webSpeechClient;
+   };
+   ```
+
+3. **Add voice selection UI** in `TTSPanel.tsx`
+
+#### Customizing Speak Button Behavior
+
+To change what happens when "Speak" is clicked:
+
+**Example: Speak and highlight simultaneously**
+```typescript
+const handleSpeakText = async () => {
+  if (!selection || !selection.text) return;
+
+  // Highlight the text
+  handleHighlight(true);
+
+  // Start speaking
+  setShowAnnotPopup(false);
+  eventDispatcher.dispatch('tts-speak', {
+    bookKey,
+    range: selection.range,
+    highlightWhileSpeaking: true  // Custom option
+  });
+};
+```
+
+#### Adding Speak to Other Popups
+
+To add "Speak" button to Wikipedia/Wiktionary popups:
+
+1. **Edit popup component** (e.g., `WikipediaPopup.tsx`):
+   ```typescript
+   const handleSpeak = () => {
+     eventDispatcher.dispatch('tts-speak', {
+       bookKey,
+       text: wikiContent  // Speak wiki content, not book text
+     });
+   };
+
+   return (
+     <Popup>
+       {/* ... existing content ... */}
+       <button onClick={handleSpeak}>
+         <FaHeadphones /> Speak
+       </button>
+     </Popup>
+   );
+   ```
+
+### Toolbar Button Order
+
+**Current order** (Annotator.tsx:346-359):
+1. **Copy** - Copy text to clipboard and notebook
+2. **Highlight/Delete** - Toggle highlight on selected text
+3. **Annotate** - Open note editor
+4. **Search** - Search for text in book
+5. **Dictionary** - Wiktionary lookup
+6. **Wikipedia** - Wikipedia lookup
+7. **Translate** - DeepL translation
+8. **Speak** - Text-to-speech (NEW in Jan 2025)
+
+**Modification:**
+To change button order, reorder the `buttons` array in `Annotator.tsx:346-359`.
+
+### Performance Considerations
+
+**TTS-specific optimizations:**
+- **Cache audio** for frequently read passages
+- **Preload voices** on app startup
+- **Debounce speak events** if user rapidly clicks
+- **Cancel previous speech** when starting new
+
+**Implementation:**
+```typescript
+let currentSpeech: Promise<void> | null = null;
+
+const handleSpeakText = async () => {
+  // Cancel ongoing speech
+  if (currentSpeech) {
+    eventDispatcher.dispatch('tts-stop');
+  }
+
+  currentSpeech = eventDispatcher.dispatch('tts-speak', {
+    bookKey,
+    range: selection.range
+  });
+};
+```
+
+### Common Issues
+
+**Issue: "Speak" button not working**
+- Check TTS controller is initialized
+- Verify `eventDispatcher` is imported in Annotator
+- Inspect browser console for TTS API errors
+- Test if Web Speech API is supported (check browser)
+
+**Issue: No voices available**
+- Web Speech API may not support the language
+- Edge TTS requires internet connection
+- Check `TTSController.getVoices()` returns voices
+
+**Issue: Poor voice quality**
+- Switch to Edge TTS backend (select Edge voice)
+- Adjust speech rate/pitch in TTS panel
+- Some languages have limited Web Speech quality
+
+**Issue: Speech interrupted when scrolling**
+- TTS continues independently of scroll position
+- Consider pausing TTS on scroll events
+- Or implement visual indicator of speaking position
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `Annotator.tsx:339-343` | handleSpeakText handler |
+| `Annotator.tsx:358` | Speak button definition |
+| `TTSController.ts` | Main TTS orchestration |
+| `WebSpeechClient.ts` | Browser TTS implementation |
+| `EdgeTTSClient.ts` | Microsoft Edge TTS |
+| `ssml.ts` | SSML generation utilities |
+| `event.ts` | Event dispatcher for TTS |
