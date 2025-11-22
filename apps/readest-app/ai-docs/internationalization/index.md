@@ -55,6 +55,8 @@ Arabic is the first RTL language supported in Readest. The UI automatically adju
 
 **Future RTL Languages**: Hebrew and other RTL languages can be added following the same pattern established for Arabic.
 
+**Detailed Documentation**: See **[RTL and Arabic Language Support](./rtl-arabic.md)** for comprehensive RTL implementation details, supported languages, UI direction switching, typography considerations, and AI agent modification guidelines.
+
 ## Architecture
 
 ### Technology Stack

@@ -1,6 +1,6 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `cab757257` (0.8.5 → 0.9.18 releases)
+**Version**: Documentation for commits `571baf98` through `f4908c45` (0.8.5 → 0.9.31 releases)
 **Last Updated**: February 2025
 
 ## Introduction
@@ -640,4 +640,99 @@ These sections will be added in future documentation updates.
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `cab757257` for context on the codebase state at this point.**
+## Version 0.9.19 - 0.9.31 Updates (cab757257 → f4908c45)
+
+### Major Features Added (Feb - Mar 2025)
+
+1. **RTL and Arabic Language Support** (v0.9.19-0.9.20)
+   - Full right-to-left (RTL) layout support
+   - Arabic language translations and UI mirroring
+   - RTL progress bars and navigation
+   - Support for 8 RTL languages (Arabic, Hebrew, Persian, Urdu, etc.)
+   - **See**: [internationalization/rtl-arabic.md](./internationalization/rtl-arabic.md)
+
+2. **Vertical Layout Enhancements** (v0.9.19-0.9.31)
+   - Vertical writing mode for CJK languages
+   - Border frames for vertical reading (#612)
+   - Punctuation replacement for vertical text (#754)
+   - Enhanced vertical layout tools (#830)
+   - **See**: Documentation integrated into settings and internationalization docs
+
+3. **CJK Font Configuration** (v0.9.31, #836)
+   - Configurable default CJK fonts in CJK environments
+   - LXGW WenKai and Noto Serif JP support (#722)
+   - Platform-specific CJK font lists
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+4. **Book Metadata Search** (v0.9.31, #838)
+   - Search books by title, author, and metadata in bookshelf
+   - Enhanced library organization
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+5. **TXT File Import** (v0.9.27, #655, #757, #708)
+   - Support for importing TXT files as books
+   - Desktop and mobile TXT file handling
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+6. **Markdown Export for Annotations** (v0.9.25, #689)
+   - Export annotations in markdown format
+   - Structured export with metadata
+   - **See**: [annotation-system/index.md](./annotation-system/index.md)
+
+7. **Custom CSS Enhancements** (v0.9.19, #503, #507, #594)
+   - Customize Foliate view styles with CSS (#507)
+   - Styled reader UI via custom CSS (#503)
+   - Theme editor for custom theme colors (#594)
+   - **See**: [settings-system/custom-css-editor.md](./settings-system/custom-css-editor.md)
+
+8. **Platform-Specific Enhancements**
+   - **Android**: Content URI handling (#829, #833), Custom Tabs OAuth (#788), file chooser improvements (#798, #799, #807)
+   - **iOS**: Background TTS (#822), Sign in with Apple (#411), haptics (#428), native OAuth (#433, #443)
+   - **macOS**: Traffic light positioning (#297, #497)
+   - **Windows**: Single-instance handler (#724, #726), style tweaks (#707)
+   - **Linux**: F-Droid metadata (#682)
+   - **See**: Platform-specific docs in [cross-platform-support/](./cross-platform-support/)
+
+9. **Desktop Features**
+   - Fullscreen option (#534)
+   - Drag and drop import (#536)
+   - Transient import mode (#709)
+   - Window on top option (#825)
+
+10. **Mobile UI Improvements**
+    - Action bar at bottom (#681)
+    - Keyboard handling improvements (#720, #762, #763)
+    - Mobile-optimized layouts
+
+11. **TTS Improvements**
+    - Configurable timeout (#826)
+    - Language normalization (#742)
+    - Background audio on iOS (#822)
+    - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
+
+### Enhancements (0.9.19 - 0.9.31 Period)
+
+- **Settings**: Reset password page (#731), language preference options (#686)
+- **Layout**: Override justify style (#687), responsive footnotes (#632)
+- **Performance**: Cache NativeFile with LRU (#816), DeepL free plan translation (#608)
+- **UI**: Theme mode fixes (#824), custom CSS textarea (#766), rounded reader widget (#815)
+- **Compatibility**: CBZ metadata parsing (#688), PDF TOC (#739), EPUB without dc metadata (#506)
+- **Storage**: Fixed storage quota for self-hosted (#806), R2 and S3 support (#718)
+- **Sync**: Improved translation API with retry (#770), load balancing (#771)
+
+### Platform Documentation
+
+Platform-specific documentation has been reorganized into separate files:
+- [Android Platform](./cross-platform-support/android.md)
+- [iOS Platform](./cross-platform-support/ios.md)
+- [macOS Platform](./cross-platform-support/macos.md)
+- [Windows Platform](./cross-platform-support/windows.md)
+- [Linux Platform](./cross-platform-support/linux.md)
+- [PWA Enhancements](./cross-platform-support/pwa-enhancements.md)
+
+### Breaking Changes
+None - all changes are backward compatible
+
+---
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `f4908c45` for context on the codebase state at this point.**

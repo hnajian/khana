@@ -9,10 +9,21 @@ Readest supports two deployment modes:
 
 Both modes share the same Next.js codebase but use different service implementations (`NativeAppService` vs `WebAppService`) for platform-specific operations. **Web platform support was added in commit aa16bc09 (Dec 2024)**.
 
-## Sub-Features
+## Platform-Specific Documentation
 
-- **[Progressive Web App (PWA) Enhancements](./pwa-enhancements.md)** - PWA capabilities added in January 2025
-- 
+### Mobile Platforms
+- **[Android Platform](./android.md)** - Android-specific features, native bridge APIs, and optimizations
+- **[iOS Platform](./ios.md)** - iOS-specific features, Sign in with Apple, haptics, and background audio
+
+### Desktop Platforms
+- **[macOS Platform](./macos.md)** - macOS-specific features, traffic light positioning, and title bar overlay
+- **[Windows Platform](./windows.md)** - Windows-specific features, custom window controls, and single-instance handling
+- **[Linux Platform](./linux.md)** - Linux-specific features, F-Droid integration, and GTK theming
+
+### Web Platform
+- **[Progressive Web App (PWA) Enhancements](./pwa-enhancements.md)** - PWA capabilities, service workers, and offline support
+
+##
 ## Key Components
 
 ### Primary Files
