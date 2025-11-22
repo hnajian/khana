@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Document Reading Engine is the core functionality of Readest that enables loading, parsing, and rendering of multiple ebook and document formats. At commit `571baf98`, it supports EPUB, PDF, MOBI, CBZ (comic books), and FB2/FBZ formats through integration with the foliate-js library.
+The Document Reading Engine is the core functionality of Readest that enables loading, parsing, and rendering of multiple ebook and document formats. At commit `d757555f`, it supports EPUB, PDF, MOBI, CBZ (comic books), and FB2/FBZ formats through integration with the foliate-js library.
 
 ## Key Components
 
