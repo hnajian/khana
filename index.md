@@ -1,6 +1,6 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `76c5f585` (0.8.5 → 0.9.0 releases)
+**Version**: Documentation for commits `571baf98` through `d757555f` (0.8.5 → 0.9.7 releases)
 **Last Updated**: January 2025
 
 ## Introduction
@@ -63,9 +63,10 @@ Each feature document contains:
 | **Settings System** | [feature-settings-system.md](./feature-settings-system.md) | Three-tier settings hierarchy (global/book/view) |
 | **State Management** | [feature-state-management.md](./feature-state-management.md) | Zustand stores architecture and patterns |
 | **Library Management** | [feature-library-management.md](./feature-library-management.md) | Book import/export, metadata, cover handling |
-| **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, **web platform support**, platform-specific code |
+| **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, **web platform support**, **PWA enhancements**, platform-specific code |
 | **Authentication & Sync** | [feature-auth-sync.md](./feature-auth-sync.md) | User accounts, OAuth, cloud sync for progress and notes |
-| **Internationalization** | [feature-internationalization.md](./feature-internationalization.md) | **NEW**: 14 languages, i18next framework, translation management |
+| **Internationalization** | [feature-internationalization.md](./feature-internationalization.md) | 14 languages, i18next framework, translation management |
+| **Text-to-Speech (TTS)** | [feature-text-to-speech.md](./feature-text-to-speech.md) | **NEW**: Dual backend (Web Speech + Edge TTS), 100+ voices, audio preloading |
 
 ## Common Tasks Quick Reference
 
@@ -482,4 +483,60 @@ None - all changes are backward compatible
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `76c5f585` for context on the codebase state at this point.**
+## Version 0.9.2 - 0.9.7 Updates (76c5f585 → d757555f)
+
+### Major Features Added (Jan 5-23, 2025)
+
+1. **Text-to-Speech (TTS)** (Jan 7-15, 2025)
+   - Dual backend: Web Speech API + Microsoft Edge TTS
+   - 100+ neural voices across 50+ languages
+   - Speech rate control (0.2x - 3.0x)
+   - Audio preloading for seamless playback
+   - Sentence navigation (forward/backward)
+   - iOS audio unblocking and PWA support
+   - Desktop media controls integration
+   - **See**: [feature-text-to-speech.md](./feature-text-to-speech.md)
+
+2. **Progressive Web App (PWA) Enhancements** (Jan 20-23, 2025)
+   - Full PWA support with service worker
+   - Installable on mobile devices
+   - Dynamic theme color for browser UI
+   - Safe area support for notches and home indicators
+   - Navigation optimization (no page reloads)
+   - Offline capabilities with caching
+   - **See**: [feature-cross-platform-support.md](./feature-cross-platform-support.md) (PWA section)
+
+3. **Mobile Platform Optimizations** (Jan 15-23, 2025)
+   - Swipe up gesture to toggle header/footer
+   - Responsive icon and font sizes
+   - Touch-friendly UI elements
+   - Responsive settings dialog and sidebar
+   - Compact layouts for small screens
+
+4. **Reading Progress in Bookshelf** (Jan 15, 2025)
+   - Visual progress indicators on book covers
+   - Percentage completion display
+   - Quick identification of reading status
+
+5. **Multi-Column Page Layout** (Jan 7, 2025)
+   - Support for more than 2 columns
+   - Per-book column configuration
+   - Adaptive column width
+
+### Enhancements (0.9.2 - 0.9.7 Period)
+
+- Greek language translations added
+- Noto Serif JP font support
+- Toast notifications refactored to global component
+- Improved mobile browser layout
+- Delete functionality in book details modal
+- PWA theme color in header and safe areas
+- Responsive annotation tools for mobile
+- Enhanced TTS UX with multiple improvements
+- GB18030-2022 L3 charset fallbacks
+- Dynamic viewport units for mobile browsers
+- Disabled swipe gestures in scrolled mode
+
+---
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `d757555f` for context on the codebase state at this point.**
