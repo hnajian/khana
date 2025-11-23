@@ -452,3 +452,286 @@ This runs scripts defined in `package.json`:
 - `copy-pdfjs-js`
 - `copy-pdfjs-fonts`
 - `copy-pdfjs-css`
+
+---
+
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Fixed Layout EPUB Enhancements (v0.9.80, #1995)
+
+**Major Feature**: Swipe gestures for paginating fixed-layout EPUB books.
+
+**Overview**: Fixed-layout EPUBs (commonly used for graphic novels, manga, children's books, and illustrated content) now support swipe gestures for page navigation, matching the interaction model of dedicated comic book readers.
+
+**Fixed Layout Detection**:
+```typescript
+// Detect if EPUB uses fixed layout
+const isFixedLayout = (book: EPUBBook): boolean => {
+  const metadata = book.package?.metadata;
+
+  // Check rendition:layout property
+  if (metadata?.layout === 'pre-paginated') {
+    return true;
+  }
+
+  // Check META-INF/com.apple.ibooks.display-options.xml
+  if (book.container?.ipadOrientation === 'landscape-only' ||
+      book.container?.ipadOrientation === 'portrait-only') {
+    return true;
+  }
+
+  return false;
+};
+```
+
+**Swipe Implementation** (`packages/foliate-js/epub.js`):
+```typescript
+class FixedLayoutView {
+  enableSwipeNavigation() {
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    this.container.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+
+    this.container.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      this.handleSwipe();
+    });
+  }
+
+  handleSwipe() {
+    const swipeThreshold = 50; // pixels
+    const diff = touchStartX - touchEndX;
+
+    if (Math.abs(diff) < swipeThreshold) return;
+
+    if (diff > 0) {
+      // Swipe left - next page
+      this.nextPage();
+    } else {
+      // Swipe right - previous page
+      this.previousPage();
+    }
+  }
+}
+```
+
+**Features**:
+- Horizontal swipe navigation (left/right for next/previous page)
+- Configurable swipe sensitivity
+- Prevents accidental navigation during zooming
+- Works on touch devices (mobile, tablets)
+- Respects reading direction (RTL support)
+
+**User Experience**:
+- Swipe left → Next page
+- Swipe right → Previous page
+- Tap center → Show/hide UI
+- Pinch to zoom (swipe disabled while zoomed)
+- Double-tap to fit page to screen
+
+**Files**:
+- `packages/foliate-js/epub.js` - Fixed layout handling
+- `src/app/reader/hooks/useGestures.ts` - Gesture detection
+- `src/app/reader/components/FixedLayoutViewer.tsx` - Fixed layout renderer
+
+### PDF Zoom and Scaling Improvements (v0.9.79-0.9.82)
+
+**Restore Scale Factor for PDFs** (v0.9.80, #1989):
+
+**Problem**: PDF zoom level wasn't persisted across sessions.
+
+**Solution**: Save and restore scale factor (zoom level) as part of book config.
+
+**Implementation**:
+```typescript
+interface PDFConfig extends BookConfig {
+  scaleFactor?: number;  // 0.5 = 50%, 1.0 = 100%, 2.0 = 200%, etc.
+}
+
+// Save zoom level when changed
+const savePDFZoom = (scale: number) => {
+  updateBookConfig(bookHash, {
+    ...config,
+    scaleFactor: scale
+  });
+};
+
+// Restore zoom level on book open
+const restorePDFZoom = (config: PDFConfig) => {
+  if (config.scaleFactor) {
+    pdfViewer.currentScale = config.scaleFactor;
+  }
+};
+```
+
+**Apply Zoom Shortcuts to PDFs** (v0.9.80, #2016):
+
+**Feature**: Keyboard shortcuts for zooming PDFs.
+
+**Shortcuts**:
+- `Ctrl/Cmd +` or `Ctrl/Cmd =` → Zoom in
+- `Ctrl/Cmd -` → Zoom out
+- `Ctrl/Cmd 0` → Reset to 100%
+- `Ctrl/Cmd 9` → Fit width
+- `Ctrl/Cmd 8` → Fit height
+
+**Implementation**:
+```typescript
+const handleZoomShortcut = (e: KeyboardEvent) => {
+  if (!e.metaKey && !e.ctrlKey) return;
+
+  switch(e.key) {
+    case '+':
+    case '=':
+      e.preventDefault();
+      pdfViewer.increaseScale();
+      break;
+    case '-':
+      e.preventDefault();
+      pdfViewer.decreaseScale();
+      break;
+    case '0':
+      e.preventDefault();
+      pdfViewer.currentScale = 1.0;
+      break;
+    case '9':
+      e.preventDefault();
+      pdfViewer.currentScaleValue = 'page-width';
+      break;
+    case '8':
+      e.preventDefault();
+      pdfViewer.currentScaleValue = 'page-height';
+      break;
+  }
+};
+```
+
+**Disable Swipe When PDF Zoomed** (v0.9.80, #2068):
+
+**Problem**: Swipe up gesture to toggle action bar interfered with panning zoomed PDFs.
+
+**Solution**: Disable swipe-up gesture when PDF is zoomed in.
+
+**Implementation**:
+```typescript
+const shouldAllowSwipeUp = (): boolean => {
+  // Only allow swipe up to toggle action bar when PDF at 100% zoom
+  if (isPDF && pdfViewer.currentScale > 1.0) {
+    return false;
+  }
+  return true;
+};
+
+// Gesture handler
+const handleSwipeUp = (e: TouchEvent) => {
+  if (!shouldAllowSwipeUp()) {
+    e.preventDefault();
+    return;
+  }
+
+  toggleActionBar();
+};
+```
+
+**Fixed Zoom Handling on iOS/macOS** (v0.9.79, #1978):
+
+**Problem**: Zoom level would reset unexpectedly on iOS and macOS.
+
+**Solution**: Properly handle viewport meta tag and WebKit zoom events.
+
+**Implementation**:
+```typescript
+// Prevent iOS from auto-zooming
+const preventAutoZoom = () => {
+  const viewport = document.querySelector('meta[name=viewport]');
+  if (viewport) {
+    viewport.setAttribute('content',
+      'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'
+    );
+  }
+};
+
+// Handle WebKit gesture events
+document.addEventListener('gesturestart', (e) => {
+  e.preventDefault();  // Prevent native zoom
+});
+
+document.addEventListener('gesturechange', (e) => {
+  e.preventDefault();
+  const scale = e.scale;
+  applyCustomZoom(scale);
+});
+```
+
+**Platform-Specific Behavior**:
+- **iOS/macOS**: Uses WebKit gesture events for zoom
+- **Android**: Uses touch events for pinch-to-zoom
+- **Desktop**: Mouse wheel + Ctrl for zoom
+
+### EPUB Font Size Scaling (v0.9.80, #2101)
+
+**Feature**: Adjust font size directly instead of zooming HTML.
+
+**Problem**: Using CSS zoom to change text size affected the entire layout, causing issues with images, margins, and fixed-position elements.
+
+**Solution**: Change `font-size` property instead of `zoom`.
+
+**Before**:
+```typescript
+// Old approach - zooms entire HTML
+const changeFontSize = (multiplier: number) => {
+  document.documentElement.style.zoom = `${multiplier * 100}%`;
+};
+```
+
+**After**:
+```typescript
+// New approach - adjusts font size only
+const changeFontSize = (multiplier: number) => {
+  const baseFontSize = 16; // px
+  const newSize = baseFontSize * multiplier;
+
+  document.documentElement.style.fontSize = `${newSize}px`;
+};
+```
+
+**Benefits**:
+- Images maintain their original size
+- Layout margins and padding stay proportional
+- Fixed-position elements (headers, footers) work correctly
+- Better compatibility with publisher CSS
+- No blurry text from zoom scaling
+
+**Implementation** (`packages/foliate-js/view.js`):
+```typescript
+class EPUBView {
+  setFontSize(size: number) {
+    // size: 0.5 to 2.0 (50% to 200%)
+    const sizeInRem = size; // 1.0 = 16px by default
+
+    this.iframe.contentDocument.documentElement.style.fontSize =
+      `${sizeInRem}rem`;
+
+    // Trigger reflow
+    this.emit('relocated');
+  }
+}
+```
+
+**User Experience**:
+- Font size slider in reader settings
+- Live preview as slider moves
+- Settings saved per book
+- Separate from PDF zoom controls
+
+**Files**:
+- `packages/foliate-js/view.js` - Font size application
+- `src/app/reader/components/settings/FontPanel.tsx` - Font size UI
+- `src/types/settings.ts` - Font size config
+
+---
+
+## Performance Considerations

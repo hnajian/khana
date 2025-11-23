@@ -1106,5 +1106,369 @@ const CJK_FONTS = {
 
 ---
 
-**Last Updated**: Documentation for commits through cc3cc58d (November 2025, v0.9.78)
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Variable Fonts Support (v0.9.80, #2007)
+
+**Major Feature**: Full support for variable fonts (TTF/OTF files with multiple weights and styles).
+
+**Overview**: Variable fonts contain multiple font weights, widths, and styles in a single file. Readest now properly detects and utilizes all available variations.
+
+**Variable Font Detection**:
+```typescript
+import * as fontkit from '@pdf-lib/fontkit';
+
+const analyzeVariableFont = async (fontFile: ArrayBuffer): Promise<FontInfo> => {
+  const font = fontkit.create(Buffer.from(fontFile));
+
+  const isVariable = font.variationAxes && Object.keys(font.variationAxes).length > 0;
+
+  if (isVariable) {
+    return {
+      family: font.familyName,
+      isVariable: true,
+      axes: Object.keys(font.variationAxes),  // ['wght', 'ital', 'wdth', etc.]
+      defaultWeight: font.variationAxes.wght?.default || 400,
+      weightRange: {
+        min: font.variationAxes.wght?.min || 100,
+        max: font.variationAxes.wght?.max || 900
+      },
+      supportsItalic: 'ital' in font.variationAxes,
+      supportsWidth: 'wdth' in font.variationAxes
+    };
+  }
+
+  return {
+    family: font.familyName,
+    isVariable: false,
+    weight: font.subfamilyName.includes('Bold') ? 700 : 400,
+    isItalic: font.subfamilyName.includes('Italic')
+  };
+};
+```
+
+**Font Weight Slider**:
+```typescript
+const VariableFontControls = ({ font }: { font: VariableFontInfo }) => {
+  const [weight, setWeight] = useState(font.defaultWeight);
+  const [width, setWidth] = useState(100);
+  const [italic, setItalic] = useState(0);
+
+  const applyVariations = () => {
+    const variations = {
+      'font-weight': weight,
+      'font-stretch': `${width}%`,
+      'font-style': italic > 0.5 ? 'italic' : 'normal'
+    };
+
+    document.documentElement.style.fontVariationSettings =
+      `"wght" ${weight}, "wdth" ${width}, "ital" ${italic}`;
+  };
+
+  return (
+    <div className="variable-font-controls">
+      <label>
+        Weight: {weight}
+        <input
+          type="range"
+          min={font.weightRange.min}
+          max={font.weightRange.max}
+          value={weight}
+          onChange={(e) => setWeight(Number(e.target.value))}
+        />
+      </label>
+
+      {font.supportsWidth && (
+        <label>
+          Width: {width}%
+          <input
+            type="range"
+            min="75"
+            max="125"
+            value={width}
+            onChange={(e) => setWidth(Number(e.target.value))}
+          />
+        </label>
+      )}
+
+      {font.supportsItalic && (
+        <label>
+          Italic
+          <input
+            type="checkbox"
+            checked={italic > 0.5}
+            onChange={(e) => setItalic(e.target.checked ? 1 : 0)}
+          />
+        </label>
+      )}
+    </div>
+  );
+};
+```
+
+**CSS Implementation**:
+```css
+@font-face {
+  font-family: 'Inter Variable';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;  /* Supports all weights */
+  font-stretch: 75% 125%;  /* Supports width variations */
+  font-style: oblique 0deg 10deg;  /* Supports slant */
+}
+
+.reader-content {
+  font-family: 'Inter Variable', sans-serif;
+  font-variation-settings: 'wght' 450, 'wdth' 100, 'slnt' 0;
+}
+```
+
+**Popular Variable Fonts**:
+- **Inter**: Modern sans-serif with 9 axes
+- **Recursive**: Monospace/Sans hybrid
+- **Source Serif Variable**: Serif with weight axis
+- **Roboto Flex**: Highly customizable
+- **Anybody**: Display font with 9 axes
+
+**Benefits**:
+- One file for all weights (reduces storage)
+- Smooth weight transitions
+- Precise typography control
+- Better performance (fewer font files)
+- Fine-tuned readability adjustments
+
+**Import Workflow**:
+1. User selects variable font file (.ttf/.otf/.woff2)
+2. App analyzes font with fontkit
+3. Detects available axes (weight, width, slant, etc.)
+4. Shows axis controls in font panel
+5. Applies variations via CSS font-variation-settings
+6. Saves settings per book
+
+**Files**:
+- `src/utils/fontAnalysis.ts` - Variable font detection
+- `src/app/reader/components/settings/VariableFontPanel.tsx` - UI controls
+- `src/types/fonts.ts` - Font type definitions
+- `src/services/fontService.ts` - Font import and management
+
+### Global Settings Access from Library (v0.9.82, #2151)
+
+**Feature**: Access global (app-wide) settings directly from the library menu.
+
+**Overview**: Previously, global settings were only accessible from within the reader. Now users can access app-wide settings from the library screen for quicker configuration.
+
+**Implementation**:
+```typescript
+const LibraryHeader = () => {
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+
+  return (
+    <header className="library-header">
+      <h1>Library</h1>
+
+      <Menu>
+        <MenuItem icon={<BookIcon />}>
+          Book Settings
+          <SubMenu>
+            <MenuItem onClick={() => openImportDialog()}>
+              Import Books
+            </MenuItem>
+            <MenuItem onClick={() => openExportDialog()}>
+              Export Library
+            </MenuItem>
+          </SubMenu>
+        </MenuItem>
+
+        <MenuItem icon={<SettingsIcon />} onClick={() => setShowGlobalSettings(true)}>
+          Global Settings
+        </MenuItem>
+
+        <MenuItem icon={<SyncIcon />} onClick={() => syncLibrary()}>
+          Sync Now
+        </MenuItem>
+      </Menu>
+
+      {showGlobalSettings && (
+        <GlobalSettingsDialog onClose={() => setShowGlobalSettings(false)} />
+      )}
+    </header>
+  );
+};
+```
+
+**Global Settings Dialog**:
+```typescript
+const GlobalSettingsDialog = ({ onClose }: { onClose: () => void }) => {
+  const [settings, setSettings] = useGlobalSettings();
+
+  return (
+    <Dialog open onClose={onClose} fullScreen>
+      <DialogTitle>Global Settings</DialogTitle>
+
+      <Tabs>
+        <Tab label="Appearance">
+          <ThemeSettings />
+          <DefaultFontSettings />
+          <LayoutSettings />
+        </Tab>
+
+        <Tab label="Reading">
+          <DefaultReadingSettings />
+          <AutoSaveSettings />
+          <PageTurnSettings />
+        </Tab>
+
+        <Tab label="Sync">
+          <CloudSyncSettings />
+          <SyncIntervalSettings />
+          <ConflictResolutionSettings />
+        </Tab>
+
+        <Tab label="Advanced">
+          <DataLocationSettings />
+          <StorageQuotaSettings />
+          <ExperimentalFeatures />
+        </Tab>
+      </Tabs>
+
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+        <Button onClick={() => resetToDefaults()}>Reset to Defaults</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+```
+
+**Global vs Book-Specific Settings**:
+
+| Setting | Scope | Where to Change |
+|---------|-------|-----------------|
+| **Theme** (Light/Dark/Sepia) | Global | Library or Reader |
+| **Default font** | Global | Library or Reader |
+| **Font size for new books** | Global | Library Settings |
+| **Current book's font size** | Book-specific | Reader |
+| **Sync enabled** | Global | Library Settings |
+| **Reading direction (LTR/RTL)** | Book-specific | Reader |
+| **Data location** | Global | Library Settings |
+| **Gestures** | Global | Library or Reader |
+
+**Settings Persistence**:
+```typescript
+interface GlobalSettings {
+  theme: 'light' | 'dark' | 'sepia';
+  defaultFont: string;
+  defaultFontSize: number;
+  syncEnabled: boolean;
+  syncInterval: number;
+  dataLocation: string;
+  experimentalFeatures: string[];
+}
+
+// Stored in: Readest/Data/global-settings.json
+const saveGlobalSettings = async (settings: GlobalSettings) => {
+  await appService.writeFile(
+    'global-settings.json',
+    JSON.stringify(settings, null, 2)
+  );
+};
+```
+
+**User Experience**:
+- Quick access to app-wide settings without opening a book
+- Changes apply to all books immediately
+- New books inherit global defaults
+- Existing books keep their customizations
+- Clear indication of global vs book-specific settings
+
+**Files**:
+- `src/app/library/components/LibraryHeader.tsx` - Menu with settings option
+- `src/components/GlobalSettingsDialog.tsx` - Settings dialog
+- `src/hooks/useGlobalSettings.ts` - Settings state management
+- `src/store/globalSettingsStore.ts` - Global settings store
+
+### Font CSS Specificity Improvements (v0.9.80, #2081, #2113)
+
+**Lower Font-Family Specificity** (v0.9.80, #2081):
+
+**Problem**: Readest's font settings were overriding publisher CSS with `!important`, causing issues with specialized fonts in books.
+
+**Solution**: Use lower specificity CSS so publisher fonts can override when needed.
+
+**Before**:
+```css
+/* Too specific - always overrides book */
+.epub-content * {
+  font-family: var(--user-font) !important;
+}
+```
+
+**After**:
+```css
+/* Lower specificity - book can override */
+.epub-content {
+  font-family: var(--user-font);
+}
+
+/* Only use higher specificity when user explicitly sets "override publisher fonts" */
+.epub-content.override-fonts * {
+  font-family: var(--user-font) !important;
+}
+```
+
+**User Control**:
+```typescript
+const FontSettings = () => {
+  const [overridePublisherFonts, setOverridePublisherFonts] = useState(false);
+
+  return (
+    <div>
+      <FontFamilyPicker />
+
+      <Checkbox
+        checked={overridePublisherFonts}
+        onChange={(e) => setOverridePublisherFonts(e.target.checked)}
+        label="Override publisher fonts"
+      />
+
+      <p className="help-text">
+        When disabled, the book's built-in fonts will be used for specially
+        formatted text (e.g., poetry, code, emphasis).
+      </p>
+    </div>
+  );
+};
+```
+
+**Hard-Coded Font Weight Override** (v0.9.80, #2113):
+
+**Problem**: Some publishers hard-code `font-weight: bold` or `font-weight: 400`, interfering with variable font weight settings.
+
+**Solution**: Override hard-coded weights when user has customized font weight.
+
+**Implementation**:
+```css
+/* Override hard-coded weights if user has custom weight */
+.epub-content.custom-weight * {
+  font-weight: var(--user-weight) !important;
+}
+
+/* Preserve semantic bold/italic */
+.epub-content.custom-weight strong,
+.epub-content.custom-weight b {
+  font-weight: calc(var(--user-weight) + 300) !important;
+}
+
+.epub-content.custom-weight em,
+.epub-content.custom-weight i {
+  font-style: italic !important;
+}
+```
+
+**Files**:
+- `packages/foliate-js/view.css` - CSS specificity rules
+- `src/app/reader/components/settings/FontPanel.tsx` - Override toggle
+
+---
+
+**Last Updated**: Documentation for commits through e1691661 (November 2025, v0.9.82)
 **Related Documents**: [reader-ui-settings](./reader-ui-settings.md), [custom-css-editor](./custom-css-editor.md), [cross-platform-support](../cross-platform-support/index.md)

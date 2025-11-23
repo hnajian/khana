@@ -1142,6 +1142,305 @@ async saveLibrary(library: BookMetadata[]): Promise<void> {
 
 ---
 
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Library List View with Groups (v0.9.80, #2009)
+
+**Feature**: Display book groups/collections in list view mode.
+
+**Overview**: Previously, groups were only visible in grid view. Now list view also shows group organization, making it easier to browse large libraries.
+
+**Implementation** (`src/app/library/components/LibraryList.tsx`):
+```typescript
+const LibraryList = ({ books, groupBy }: LibraryListProps) => {
+  const groupedBooks = useMemo(() => {
+    if (!groupBy) return { ungrouped: books };
+
+    return books.reduce((groups, book) => {
+      const key = getGroupKey(book, groupBy);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(book);
+      return groups;
+    }, {} as Record<string, BookMetadata[]>);
+  }, [books, groupBy]);
+
+  return (
+    <div className="library-list">
+      {Object.entries(groupedBooks).map(([groupName, groupBooks]) => (
+        <div key={groupName} className="book-group">
+          {groupBy && (
+            <h3 className="group-header">{groupName}</h3>
+          )}
+          {groupBooks.map(book => (
+            <BookListItem key={book.hash} book={book} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+**Grouping Options**:
+- **Author**: Group by first author
+- **Series**: Group by series name
+- **Date Added**: Group by import date
+- **Reading Status**: Group by read/unread/in-progress
+- **Genre/Tags**: Group by custom tags
+
+**UI Design**:
+```
+┌─────────────────────────────────────┐
+│ Author: J.R.R. Tolkien              │
+├─────────────────────────────────────┤
+│ □ The Hobbit        [75%] [★★★★☆]  │
+│ □ The Fellowship... [100%] [★★★★★] │
+│ □ The Two Towers    [32%] [★★★★☆]  │
+├─────────────────────────────────────┤
+│ Author: Brandon Sanderson           │
+├─────────────────────────────────────┤
+│ □ Mistborn          [0%] [☆☆☆☆☆]   │
+│ □ The Way of Kings  [45%] [★★★★★]  │
+└─────────────────────────────────────┘
+```
+
+**Features**:
+- Collapsible group headers
+- Group count badges
+- Sort within groups
+- Search across all groups
+- Sticky group headers on scroll
+
+**Files**:
+- `src/app/library/components/LibraryList.tsx` - List view with groups
+- `src/app/library/components/GroupHeader.tsx` - Collapsible header
+- `src/hooks/useLibraryGrouping.ts` - Grouping logic
+
+### Delete Confirmation from Context Menu (v0.9.80, #2029)
+
+**Feature**: Confirmation dialog when deleting books from context menu.
+
+**Problem**: Users could accidentally delete books by clicking the wrong context menu option.
+
+**Solution**: Show confirmation dialog before permanent deletion.
+
+**Implementation**:
+```typescript
+const handleDeleteFromContextMenu = async (book: BookMetadata) => {
+  const confirmed = await showDialog({
+    title: 'Delete Book',
+    message: `Are you sure you want to delete "${book.title}"?`,
+    detail: 'This will remove the book from your library. This action cannot be undone.',
+    buttons: ['Cancel', 'Delete'],
+    destructive: 1,  // Make "Delete" button red
+    defaultButton: 0  // Focus "Cancel" by default
+  });
+
+  if (confirmed === 1) {  // User clicked "Delete"
+    await deleteBook(book.hash);
+    toast.success(`"${book.title}" has been deleted`);
+  }
+};
+```
+
+**Dialog Appearance**:
+```
+┌──────────────────────────────────────┐
+│  Delete Book                     × │
+├──────────────────────────────────────┤
+│                                      │
+│  Are you sure you want to delete     │
+│  "The Hobbit"?                       │
+│                                      │
+│  This will remove the book from your │
+│  library. This action cannot be      │
+│  undone.                             │
+│                                      │
+├──────────────────────────────────────┤
+│         [Cancel]  [Delete]           │
+└──────────────────────────────────────┘
+```
+
+**Platform-Specific Implementation**:
+- **Desktop**: Native dialog via Tauri
+- **Mobile**: Modal overlay
+- **Web**: Browser-native confirm() or custom modal
+
+**Additional Safety**:
+- Destructive button styled in red
+- Default focus on "Cancel"
+- ESC key closes dialog without deleting
+- Click outside dismisses dialog
+
+**Files**:
+- `src/components/ConfirmDialog.tsx` - Confirmation dialog
+- `src/app/library/components/BookContextMenu.tsx` - Context menu
+- `src/services/dialogService.ts` - Platform-specific dialogs
+
+### Cover Image Management (v0.9.80, #2028)
+
+**Feature**: Option to remove cover image from a book.
+
+**Use Cases**:
+- Book has incorrect/placeholder cover
+- User wants to use default cover
+- Cover image is corrupted
+- Reduce storage usage
+
+**Implementation**:
+```typescript
+const removeCoverImage = async (bookHash: string) => {
+  const book = getBook(bookHash);
+
+  // Remove cover file if it exists
+  if (book.coverImageUrl && !book.coverImageUrl.startsWith('http')) {
+    await deleteFile(book.coverImageUrl);
+  }
+
+  // Update book metadata
+  updateBook(bookHash, {
+    ...book,
+    coverImageUrl: null,
+    hasCover: false
+  });
+
+  // Sync to cloud if enabled
+  if (isSyncEnabled()) {
+    await syncBookMetadata(bookHash);
+  }
+
+  toast.success('Cover image removed');
+};
+```
+
+**UI**:
+```typescript
+const CoverActions = ({ book }: CoverActionsProps) => {
+  return (
+    <Menu>
+      <MenuItem onClick={() => changeCover(book)}>
+        Change Cover...
+      </MenuItem>
+      {book.hasCover && (
+        <MenuItem onClick={() => removeCover(book)}>
+          Remove Cover
+        </MenuItem>
+      )}
+      <MenuItem onClick={() => extractCover(book)}>
+        Extract from Book
+      </MenuItem>
+    </Menu>
+  );
+};
+```
+
+**Fallback Behavior**:
+- Shows default cover placeholder
+- Displays first letter of title
+- Uses theme colors for background
+
+**Files**:
+- `src/services/coverService.ts` - Cover management
+- `src/app/library/components/CoverActions.tsx` - Cover context menu
+- `src/components/DefaultCover.tsx` - Placeholder cover
+
+### Robust Metadata Import (v0.9.80, #2064)
+
+**Feature**: Handle invalid language codes and titles when importing books.
+
+**Problem**: Some ebooks have malformed metadata that caused import failures.
+
+**Solutions**:
+
+**Invalid Language Codes**:
+```typescript
+const normalizeLanguageCode = (code: string | string[]): string => {
+  // Handle array of languages
+  if (Array.isArray(code)) {
+    return normalizeLanguageCode(code[0] || 'en');
+  }
+
+  // Handle undefined/null
+  if (!code) return 'en';
+
+  // Normalize code
+  const normalized = code.toLowerCase().trim();
+
+  // Map invalid codes to valid ones
+  const languageMap: Record<string, string> = {
+    'und': 'en',          // Undefined → English
+    'unknown': 'en',
+    'zxx': 'en',          // No linguistic content
+    'mul': 'en',          // Multiple languages
+    '': 'en',
+    'en-us': 'en',        // Regional → Base
+    'en-gb': 'en',
+    'zh-cn': 'zh',
+    'zh-tw': 'zh'
+  };
+
+  return languageMap[normalized] || normalized;
+};
+```
+
+**Invalid Titles**:
+```typescript
+const sanitizeTitle = (title: string | undefined, filename: string): string => {
+  // Handle missing title
+  if (!title || title.trim() === '') {
+    // Extract from filename
+    const name = filename.replace(/\.[^.]+$/, ''); // Remove extension
+    return name || 'Untitled Book';
+  }
+
+  // Remove control characters
+  let sanitized = title.replace(/[\x00-\x1F\x7F]/g, '');
+
+  // Trim excessive whitespace
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+
+  // Limit length
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 200) + '...';
+  }
+
+  return sanitized || 'Untitled Book';
+};
+```
+
+**Import with Validation**:
+```typescript
+const importBook = async (file: File): Promise<BookMetadata> => {
+  const { book, format } = await DocumentLoader.open(file);
+
+  const metadata: BookMetadata = {
+    hash: generateHash(file),
+    filename: file.name,
+    title: sanitizeTitle(book.metadata?.title, file.name),
+    authors: sanitizeAuthors(book.metadata?.author),
+    language: normalizeLanguageCode(book.metadata?.language),
+    format,
+    dateAdded: Date.now(),
+    // ...other fields
+  };
+
+  return metadata;
+};
+```
+
+**Error Recovery**:
+- Invalid metadata → Use filename
+- Missing language → Default to English
+- Corrupted fields → Skip and log warning
+- Continue import even with partial metadata
+
+**Files**:
+- `src/utils/metadataValidation.ts` - Validation utilities
+- `src/libs/document.ts` - Import with validation
+- `src/services/importService.ts` - Robust import flow
+
+---
+
 ## Performance Considerations
 
 - **Lazy load covers**: Only load visible covers in bookshelf
