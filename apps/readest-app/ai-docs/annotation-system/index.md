@@ -301,6 +301,74 @@ For books with complex layouts (e.g., fixed-layout EPUBs):
 - Verify scroll position handling
 - Adjust popup CSS positioning logic
 
+## Updates (v0.9.32-0.9.43)
+
+### Text Selector Hook Refactor (v0.9.41, #1131, #1020)
+
+**Overview**: Refactored text selection logic into a reusable hook for better code organization and maintainability.
+
+**File**: `src/app/reader/hooks/useTextSelector.ts`
+
+**Benefits**:
+- Centralized text selection logic
+- Easier to test and maintain
+- Reusable across annotator and other components
+- Better separation of concerns
+
+### Selection Anchor Preservation (v0.9.38, #968, #873)
+
+**Issue**: Selection anchor was lost when spanning across multiple pages in paginated content.
+
+**Fix**: Implemented anchor preservation logic to maintain selection across page boundaries.
+
+**Implementation** (`src/app/reader/components/annotator/Annotator.tsx`):
+```typescript
+const preserveSelectionAnchor = (selection: Selection) => {
+  // Store anchor node and offset
+  const anchorNode = selection.anchorNode;
+  const anchorOffset = selection.anchorOffset;
+
+  // Restore after page turn
+  selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+};
+```
+
+### Highlight Positioning Improvements (v0.9.32, #845)
+
+**Feature**: Underline and squiggly highlight decorations now positioned at the middle between text lines for better visual appeal.
+
+**CSS Update**:
+```css
+.highlight-underline {
+  text-decoration-line: underline;
+  text-decoration-style: solid;
+  text-underline-offset: 0.15em;  /* Middle between lines */
+}
+
+.highlight-squiggly {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-underline-offset: 0.15em;
+}
+```
+
+### Popup Footnotes Enhancements (v0.9.37-0.9.40)
+
+**Namespace Handling** (v0.9.37, #956):
+- Fixed popup footnotes for anchors without EPUB namespace
+- More robust anchor detection
+- Works with non-standard EPUB files
+
+**Font Inheritance** (v0.9.38, #985):
+- Popup footnotes now inherit book fonts
+- Consistent typography between main text and footnotes
+- Better readability
+
+**Visibility Fixes** (v0.9.40, #1099):
+- Fixed footnote visibility in certain layouts
+- Improved z-index handling
+- Better positioning on small screens
+
 ## Dependencies
 
 - **foliate-js**: Provides selection and annotation overlay APIs

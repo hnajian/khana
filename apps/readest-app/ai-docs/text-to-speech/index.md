@@ -483,5 +483,73 @@ describe('TTS Controller', () => {
 
 ---
 
-**Last Updated**: Documentation for commits through cab757257 (Feb 2025)
+## Updates (v0.9.32-0.9.43)
+
+### TTS Control View Hierarchy (v0.9.41, #1119, #1080)
+
+**Refactoring**: Reorganized TTS control view hierarchy for better maintainability and UX.
+
+**Improvements**:
+- Cleaner component structure
+- Better separation of concerns
+- Easier to add new controls
+- Improved mobile layout
+
+### Don't Scroll When Selection in Current Page (v0.9.39, #1046, #863)
+
+**Issue**: TTS auto-scrolling caused disorientation when current selection was already visible.
+
+**Fix**: Only scroll when highlighted text is outside viewport.
+
+```typescript
+const highlightCurrentSentence = (sentenceCfi: string) => {
+  const element = getElementByCFI(sentenceCfi);
+
+  if (!isInViewport(element)) {
+    scrollToElement(element, { behavior: 'smooth' });
+  }
+
+  element.classList.add('tts-highlight');
+};
+```
+
+### iOS Timeout Options (v0.9.40, #1037)
+
+**Feature**: TTS timeout options now properly popup on iOS.
+
+**Fix**: Adjusted modal presentation for iOS Safari/WebView compatibility.
+
+### Language Detection Improvements (v0.9.40, #1003)
+
+**Enhancement**: More robust method to detect language for TTS voice selection.
+
+**Implementation**:
+1. Try book metadata language
+2. Fallback to HTML lang attribute
+3. Detect from text content
+4. Default to system language
+
+### Metadata Language Fallback (v0.9.37, #945, #916)
+
+**Feature**: TTS now fallbacks to book metadata language when no specific language is detected.
+
+**Priority Order**:
+1. User-selected language (if manually chosen)
+2. Content language (from HTML)
+3. **Book metadata language** (NEW)
+4. System language
+
+### Extended English Voices (v0.9.38, #969, #966)
+
+**Feature**: Added more English voices for all English locales (en-US, en-GB, en-AU, etc.).
+
+**Available Voices**: 20+ English voices across different accents:
+- en-US: 8 voices
+- en-GB: 6 voices
+- en-AU: 4 voices
+- en-CA, en-IN, en-NZ, en-ZA: 2-3 voices each
+
+---
+
+**Last Updated**: Documentation for commits through def157ca (November 2025)
 **Related Documents**: [cross-platform-support](../cross-platform-support/index.md), [settings-system](../settings-system/index.md), [internationalization](../internationalization/index.md)

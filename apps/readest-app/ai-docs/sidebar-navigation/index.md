@@ -326,6 +326,76 @@ To improve "current section" highlighting:
 - Check if annotations are being saved properly
 - Inspect filter/grouping logic isn't hiding notes
 
+## Updates (v0.9.32-0.9.43)
+
+### TOC Location Information (v0.9.40, #1016)
+
+**Feature**: Added location information (page numbers or percentages) for each entry in the table of contents.
+
+**Implementation** (`src/app/reader/components/sidebar/TOCView.tsx`):
+```typescript
+const TOCItem = ({ item }: { item: TOCEntry }) => {
+  const location = getLocationForCfi(item.cfi);
+
+  return (
+    <div className="toc-item">
+      <span className="toc-title">{item.title}</span>
+      <span className="toc-location">{location}</span>
+    </div>
+  );
+};
+```
+
+**Location Formats**:
+- **Page Number**: "Page 42"
+- **Percentage**: "15%"
+- **Chapter Progress**: "Chapter 3/12"
+
+**Benefits**:
+- Quick navigation reference
+- Better understanding of book structure
+- Estimate reading time for sections
+
+### TOC Expansion Improvements (v0.9.40, #1081, #1044, #1033)
+
+**Glitch Fixes** (v0.9.40, #1081):
+- Fixed visual glitches when expanding/collapsing TOC sub-items
+- Smoother animations
+- Better performance on large TOC trees
+
+**Clickable Region Expansion** (v0.9.40, #1044):
+- Expanded clickable region for TOC expander icons
+- Easier to tap on mobile devices
+- Better touch target sizes (44x44px minimum)
+
+**Implementation**:
+```typescript
+.toc-expander {
+  padding: 12px;  /* Increased from 4px */
+  margin: -12px;  /* Negative margin to maintain layout */
+  cursor: pointer;
+  user-select: none;
+}
+```
+
+**Animation Improvements** (v0.9.39, #1033):
+- Prevented glitches during expansion
+- Smooth height transitions
+- Better collapse behavior
+
+**CSS**:
+```css
+.toc-subitems {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.toc-subitems.expanded {
+  max-height: 2000px;  /* Large enough for any TOC depth */
+}
+```
+
 ## Dependencies
 
 - **foliate-js**: Provides TOC data and search API
