@@ -1195,6 +1195,356 @@ export function useProgressSync() {
 
 ---
 
+## Version 0.9.64 - 0.9.67 Updates (f5b686ab → 33b2ba16)
+
+### iOS In-App Purchase (IAP) Integration (v0.9.67, #1673, #1676, #1678)
+
+**Major Feature**: Native In-App Purchase support for upgrading to Readest Premium on iOS.
+
+**Overview**: iOS users can now purchase premium subscriptions directly within the app using Apple's native IAP system, without leaving the app or using external payment processors.
+
+**Implementation Architecture**:
+
+1. **Native Bridge Plugin** (#1673):
+   - Tauri plugin for iOS IAP communication
+   - Bridges Swift IAP APIs to JavaScript/TypeScript
+   - Handles product fetching, purchase flow, and receipt validation
+
+2. **Server-Side API** (#1676):
+   - Receipt verification endpoint
+   - Apple App Store receipt validation
+   - Subscription status management
+   - Database updates for premium status
+
+3. **Frontend Integration** (#1678):
+   - Premium upgrade UI in settings
+   - Purchase flow with native payment sheet
+   - Subscription status display
+   - Auto-renewal management
+
+**Native Bridge** (`src-tauri/src/plugins/iap.rs`):
+```rust
+use tauri::plugin::{Builder, TauriPlugin};
+use tauri::{Runtime, Window};
+
+#[tauri::command]
+async fn fetch_products(product_ids: Vec<String>) -> Result<Vec<Product>, String> {
+    // Call iOS StoreKit to fetch products
+    ios::fetch_products(product_ids).await
+}
+
+#[tauri::command]
+async fn purchase_product(product_id: String) -> Result<PurchaseResult, String> {
+    // Initiate purchase flow
+    ios::purchase(product_id).await
+}
+
+#[tauri::command]
+async fn restore_purchases() -> Result<Vec<Purchase>, String> {
+    // Restore previous purchases
+    ios::restore_purchases().await
+}
+
+pub fn init<R: Runtime>() -> TauriPlugin<R> {
+    Builder::new("iap")
+        .invoke_handler(tauri::generate_handler![
+            fetch_products,
+            purchase_product,
+            restore_purchases
+        ])
+        .build()
+}
+```
+
+**iOS Native Implementation** (`src-tauri/ios/IAPPlugin.swift`):
+```swift
+import StoreKit
+
+class IAPPlugin: NSObject, SKProductsRequestDelegate, SKPaymentTransactionObserver {
+    private var productRequest: SKProductsRequest?
+    private var products: [SKProduct] = []
+
+    func fetchProducts(productIds: [String], completion: @escaping ([SKProduct]?, Error?) -> Void) {
+        let request = SKProductsRequest(productIdentifiers: Set(productIds))
+        request.delegate = self
+        productRequest = request
+        request.start()
+    }
+
+    func purchase(product: SKProduct) {
+        let payment = SKPayment(product: product)
+        SKPaymentQueue.default().add(payment)
+    }
+
+    func productsRequest(_ request: SKProductsRequest, didReceive response: SKProductsResponse) {
+        self.products = response.products
+        // Notify Tauri bridge of products
+    }
+
+    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
+        for transaction in transactions {
+            switch transaction.transactionState {
+            case .purchased:
+                // Notify success and validate receipt
+                validateReceipt(transaction: transaction)
+            case .failed:
+                // Notify failure
+                SKPaymentQueue.default().finishTransaction(transaction)
+            case .restored:
+                // Handle restoration
+                SKPaymentQueue.default().finishTransaction(transaction)
+            default:
+                break
+            }
+        }
+    }
+}
+```
+
+**Server API** (`src/pages/api/iap/verify.ts`):
+```typescript
+import { NextApiRequest, NextApiResponse } from 'next';
+import { verifyAppleReceipt } from '@/utils/apple-receipt';
+import { updateUserSubscription } from '@/services/supabase';
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { receiptData, userId } = req.body;
+
+  try {
+    // Verify receipt with Apple
+    const verification = await verifyAppleReceipt(receiptData);
+
+    if (!verification.valid) {
+      return res.status(400).json({ error: 'Invalid receipt' });
+    }
+
+    // Extract subscription info
+    const { productId, expiresDate, transactionId } = verification;
+
+    // Update user subscription in database
+    await updateUserSubscription(userId, {
+      platform: 'ios',
+      productId,
+      expiresDate,
+      transactionId,
+      status: 'active'
+    });
+
+    res.status(200).json({
+      success: true,
+      subscription: {
+        productId,
+        expiresDate,
+        status: 'active'
+      }
+    });
+  } catch (error) {
+    console.error('IAP verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+}
+```
+
+**Frontend Integration** (`src/components/PremiumUpgrade.tsx`):
+```typescript
+import { invoke } from '@tauri-apps/api/tauri';
+
+const PremiumUpgrade = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [purchasing, setPurchasing] = useState(false);
+
+  useEffect(() => {
+    // Fetch available products
+    invoke<Product[]>('fetch_products', {
+      productIds: ['premium_monthly', 'premium_yearly']
+    }).then(setProducts);
+  }, []);
+
+  const handlePurchase = async (productId: string) => {
+    setPurchasing(true);
+    try {
+      const result = await invoke<PurchaseResult>('purchase_product', {
+        productId
+      });
+
+      // Verify with backend
+      await fetch('/api/iap/verify', {
+        method: 'POST',
+        body: JSON.stringify({
+          receiptData: result.receiptData,
+          userId: user.id
+        })
+      });
+
+      toast.success('Premium activated!');
+      refreshUserStatus();
+    } catch (error) {
+      toast.error('Purchase failed: ' + error.message);
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  return (
+    <div className="premium-upgrade">
+      <h2>Upgrade to Premium</h2>
+      {products.map(product => (
+        <div key={product.id} className="product-card">
+          <h3>{product.title}</h3>
+          <p>{product.description}</p>
+          <span className="price">{product.price}</span>
+          <button
+            onClick={() => handlePurchase(product.id)}
+            disabled={purchasing}
+          >
+            {purchasing ? 'Processing...' : 'Subscribe'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+**Sandbox Environment** (#1679):
+- TestFlight builds use Apple's sandbox environment
+- Separate product IDs for testing
+- No real charges during testing
+- Receipt verification against sandbox URL
+
+**Receipt Validation**:
+- Server-side verification with Apple's verifyReceipt API
+- Production URL: `https://buy.itunes.apple.com/verifyReceipt`
+- Sandbox URL: `https://sandbox.itunes.apple.com/verifyReceipt`
+- Auto-fallback from production to sandbox for testing
+
+**Files**:
+- `src-tauri/src/plugins/iap.rs` - Rust IAP plugin
+- `src-tauri/ios/IAPPlugin.swift` - iOS native IAP
+- `src/pages/api/iap/verify.ts` - Receipt verification API
+- `src/pages/api/iap/webhook.ts` - Apple server notifications
+- `src/components/PremiumUpgrade.tsx` - Premium upgrade UI
+- `src/services/iapService.ts` - IAP service abstraction
+
+### Increased Cloud Sync Storage for Premium Users (v0.9.67, #1696)
+
+**Feature**: Premium users receive significantly increased cloud storage quota.
+
+**Storage Quotas**:
+
+| Plan | Storage Quota | Books Limit | Notes/Highlights |
+|------|---------------|-------------|------------------|
+| **Free** | 100 MB | ~100 books | Unlimited |
+| **Premium** | 1 GB | ~1,000 books | Unlimited |
+| **Pro** | 10 GB | ~10,000 books | Unlimited |
+
+**Implementation** (`src/services/quotaManager.ts`):
+```typescript
+const STORAGE_QUOTAS = {
+  free: 100 * 1024 * 1024,      // 100 MB
+  premium: 1024 * 1024 * 1024,  // 1 GB
+  pro: 10 * 1024 * 1024 * 1024  // 10 GB
+};
+
+const checkStorageQuota = async (userId: string): Promise<QuotaStatus> => {
+  const { data: user } = await supabase
+    .from('users')
+    .select('subscription_tier')
+    .eq('id', userId)
+    .single();
+
+  const tier = user?.subscription_tier || 'free';
+  const quota = STORAGE_QUOTAS[tier];
+
+  const { data: usage } = await supabase
+    .rpc('get_user_storage_usage', { user_id: userId });
+
+  return {
+    used: usage,
+    total: quota,
+    available: quota - usage,
+    percentUsed: (usage / quota) * 100
+  };
+};
+```
+
+**Quota Display** (`src/components/StorageQuota.tsx`):
+```typescript
+const StorageQuota = () => {
+  const { used, total, percentUsed } = useStorageQuota();
+
+  return (
+    <div className="storage-quota">
+      <div className="quota-bar">
+        <div
+          className="quota-used"
+          style={{ width: `${percentUsed}%` }}
+        />
+      </div>
+      <span className="quota-text">
+        {formatBytes(used)} / {formatBytes(total)} used
+      </span>
+      {percentUsed > 80 && (
+        <div className="quota-warning">
+          Storage almost full. Consider upgrading to Premium.
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+**Priority Sync**:
+- Premium users get faster sync speeds
+- Higher priority in sync queue
+- Concurrent sync for multiple devices
+- Real-time sync (vs. periodic for free users)
+
+**Enhanced Backup**:
+- Automatic daily backups
+- 30-day backup retention (vs. 7 days for free)
+- Point-in-time recovery
+- Backup download option
+
+**Files**:
+- `src/services/quotaManager.ts` - Quota management
+- `src/components/StorageQuota.tsx` - Quota display
+- `src/pages/api/storage/usage.ts` - Usage tracking API
+- Database: `users` table with `subscription_tier` column
+
+### API Enhancements for IAP
+
+**Ensure Proper String Decoding on Edge Runtimes** (#1680):
+- Fixed string encoding issues in Cloudflare Workers
+- Proper UTF-8 handling for international characters
+- Base64 decoding for receipt data
+
+**Use Node API Endpoint for IAP Verifying** (#1683):
+- Switched from Edge runtime to Node runtime
+- Better Apple receipt verification library support
+- More reliable HTTPS connections to Apple servers
+- Improved error handling and logging
+
+**Batch Updating Daily Usage Key in KV** (#1694):
+- Optimized daily usage tracking
+- Batch updates to reduce API calls
+- Cloudflare Workers KV for fast access
+- Quota tracking for translation and other services
+
+**Files**:
+- `src/pages/api/iap/verify.ts` - Node-based verification
+- `src/utils/kv.ts` - KV storage utilities
+- `src/services/usageTracker.ts` - Usage tracking
+
+---
+
 ## Future Enhancements
 
 ### Planned Features

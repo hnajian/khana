@@ -192,6 +192,246 @@ For performance improvements on large files:
 | Performance tuning | `src/libs/document.ts` | `src/app/reader/components/FoliateViewer.tsx` |
 | Cover extraction | `packages/foliate-js/{format}.js` | `src/services/appService.ts` |
 
+---
+
+## Version 0.9.64 - 0.9.67 Updates (f5b686ab → 33b2ba16)
+
+### PDF Custom Background Theming (v0.9.67, #1661)
+
+**Major Feature**: Support for applying custom background colors and themes to PDF files.
+
+**Overview**: Users can now customize PDF background colors, apply dark mode themes, and ensure consistent theming across all document formats (EPUB, PDF, MOBI, etc.).
+
+**Problem Addressed**:
+- PDFs traditionally have fixed background colors (usually white)
+- Dark mode reading difficult with white PDF backgrounds
+- Inconsistent theming between EPUB (customizable) and PDF (fixed)
+- Eye strain from bright backgrounds in low-light conditions
+
+**Implementation**:
+
+**1. PDF.js Custom Layer** (`packages/foliate-js/pdf.js`):
+```javascript
+class PDFView {
+  constructor(book, opts) {
+    this.book = book;
+    this.opts = opts;
+    this.customBackground = opts.customBackground || null;
+    this.invertColors = opts.invertColors || false;
+  }
+
+  renderPage(pageNum) {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    // Render PDF page
+    const renderContext = {
+      canvasContext: context,
+      viewport: this.viewport
+    };
+
+    this.pdfPage.render(renderContext).promise.then(() => {
+      // Apply custom background
+      if (this.customBackground) {
+        this.applyBackground(canvas, this.customBackground);
+      }
+
+      // Apply color inversion for dark mode
+      if (this.invertColors) {
+        this.invertCanvasColors(canvas);
+      }
+    });
+  }
+
+  applyBackground(canvas, backgroundColor) {
+    const context = canvas.getContext('2d');
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const bgColor = this.hexToRgb(backgroundColor);
+
+    // Replace white background with custom color
+    for (let i = 0; i < data.length; i += 4) {
+      // Check if pixel is close to white (background)
+      if (this.isBackgroundPixel(data[i], data[i+1], data[i+2])) {
+        data[i] = bgColor.r;     // Red
+        data[i+1] = bgColor.g;   // Green
+        data[i+2] = bgColor.b;   // Blue
+        // data[i+3] is alpha, keep unchanged
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+  }
+
+  isBackgroundPixel(r, g, b) {
+    // Consider pixels close to white as background
+    const threshold = 240;
+    return r > threshold && g > threshold && b > threshold;
+  }
+
+  invertCanvasColors(canvas) {
+    const context = canvas.getContext('2d');
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255 - data[i];       // Invert red
+      data[i+1] = 255 - data[i+1];   // Invert green
+      data[i+2] = 255 - data[i+2];   // Invert blue
+      // data[i+3] (alpha) unchanged
+    }
+
+    context.putImageData(imageData, 0, 0);
+  }
+
+  hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 255, g: 255, b: 255 };
+  }
+}
+```
+
+**2. Settings Integration** (`src/types/settings.ts`):
+```typescript
+interface ViewSettings {
+  // ...existing settings
+
+  // PDF-specific theming
+  pdfCustomBackground?: string;       // Hex color code
+  pdfInvertColors?: boolean;          // Dark mode inversion
+  pdfBrightness?: number;             // 0-100, default 100
+  pdfContrast?: number;               // 0-200, default 100
+}
+```
+
+**3. UI Controls** (`src/app/reader/components/settings/ThemePanel.tsx`):
+```typescript
+const PDFThemeSettings = () => {
+  const { settings, updateSettings } = useSettings();
+  const isPDF = useReaderStore(state => state.currentBook?.format === 'PDF');
+
+  if (!isPDF) return null;
+
+  return (
+    <div className="pdf-theme-settings">
+      <h3>PDF Theming</h3>
+
+      <ColorPicker
+        label="Background Color"
+        value={settings.pdfCustomBackground}
+        onChange={(color) => updateSettings({ pdfCustomBackground: color })}
+      />
+
+      <Toggle
+        label="Invert Colors (Dark Mode)"
+        checked={settings.pdfInvertColors}
+        onChange={(checked) => updateSettings({ pdfInvertColors: checked })}
+      />
+
+      <Slider
+        label="Brightness"
+        min={0}
+        max={100}
+        value={settings.pdfBrightness || 100}
+        onChange={(val) => updateSettings({ pdfBrightness: val })}
+      />
+
+      <Slider
+        label="Contrast"
+        min={0}
+        max={200}
+        value={settings.pdfContrast || 100}
+        onChange={(val) => updateSettings({ pdfContrast: val })}
+      />
+    </div>
+  );
+};
+```
+
+**4. Apply Settings to PDF View** (`src/app/reader/components/FoliateViewer.tsx`):
+```typescript
+useEffect(() => {
+  if (!view || book.format !== 'PDF') return;
+
+  const pdfView = view as PDFView;
+  pdfView.customBackground = viewSettings.pdfCustomBackground;
+  pdfView.invertColors = viewSettings.pdfInvertColors;
+  pdfView.brightness = viewSettings.pdfBrightness / 100;
+  pdfView.contrast = viewSettings.pdfContrast / 100;
+
+  // Re-render current page with new settings
+  pdfView.render(pdfView.currentPage);
+}, [viewSettings.pdfCustomBackground, viewSettings.pdfInvertColors,
+    viewSettings.pdfBrightness, viewSettings.pdfContrast]);
+```
+
+**Features**:
+- **Custom Background**: Choose any color for PDF background
+- **Dark Mode**: Invert colors for dark mode reading
+- **Brightness Control**: Adjust overall brightness
+- **Contrast Control**: Enhance text readability
+- **Theme Presets**: Predefined themes (Sepia, Dark, Light, etc.)
+- **Per-Book Settings**: Each PDF can have different theme settings
+
+**Theme Presets**:
+```typescript
+const PDF_THEME_PRESETS = {
+  light: {
+    pdfCustomBackground: '#ffffff',
+    pdfInvertColors: false,
+    pdfBrightness: 100,
+    pdfContrast: 100
+  },
+  dark: {
+    pdfCustomBackground: '#1a1a1a',
+    pdfInvertColors: true,
+    pdfBrightness: 80,
+    pdfContrast: 110
+  },
+  sepia: {
+    pdfCustomBackground: '#f4ecd8',
+    pdfInvertColors: false,
+    pdfBrightness: 95,
+    pdfContrast: 105
+  },
+  night: {
+    pdfCustomBackground: '#000000',
+    pdfInvertColors: true,
+    pdfBrightness: 70,
+    pdfContrast: 120
+  }
+};
+```
+
+**Performance Considerations**:
+- Canvas manipulation done on page render only
+- Settings changes trigger re-render of current page
+- Cached rendered pages invalidated on theme change
+- Background workers can be used for intensive operations
+
+**Limitations**:
+- Image-heavy PDFs may take longer to process
+- Very high contrast settings may affect image quality
+- Color inversion may not work perfectly with all PDFs
+
+**User Experience**:
+- Settings panel shows PDF-specific controls when PDF is open
+- Live preview of theme changes
+- Smooth transitions between themes
+- Settings saved per book
+
+**Files**:
+- `packages/foliate-js/pdf.js` - PDF rendering with theming
+- `src/app/reader/components/settings/ThemePanel.tsx` - Theme UI
+- `src/types/settings.ts` - Settings types
+- `src/app/reader/components/FoliateViewer.tsx` - Settings application
+
+---
+
 ## Dependencies
 
 - **foliate-js**: Core reading engine (git submodule at `packages/foliate-js/`)

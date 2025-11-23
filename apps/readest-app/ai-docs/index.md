@@ -1,6 +1,6 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `f5b686ab` (0.8.5 → 0.9.63 releases)
+**Version**: Documentation for commits `571baf98` through `33b2ba16` (0.8.5 → 0.9.67 releases)
 **Last Updated**: November 2025
 
 ## Introduction
@@ -1071,7 +1071,146 @@ None - all changes are backward compatible
 
 ---
 
-**Version**: Documentation for commits `def157ca` through `f5b686ab` (v0.9.44 → v0.9.63)
+## Version 0.9.64 - 0.9.67 Updates (f5b686ab → 33b2ba16)
+
+### Major Features Added (November 2025)
+
+1. **Update Notes for Releases** (v0.9.64, #1552)
+   - Display release notes when new updates are available
+   - Auto-updater shows changelog before updating
+   - Improved update experience for users
+   - **See**: [cross-platform-support/index.md](./cross-platform-support/index.md)
+
+2. **Book Metadata Editor** (v0.9.64, #1583)
+   - Edit book title, author, and other metadata
+   - Custom cover image upload (#1588)
+   - Save custom covers in apps
+   - Metadata sync across devices (#1611)
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+3. **Multiple Reader Windows** (v0.9.65, #1596)
+   - Support for multiple reader windows on desktop
+   - Open different books in separate windows
+   - Independent window state for each book
+   - **See**: [cross-platform-support/index.md](./cross-platform-support/index.md)
+
+4. **Search in Library** (v0.9.67, #1662)
+   - Search by book format (EPUB, PDF, MOBI, etc.)
+   - Search in group names and descriptions
+   - Enhanced library organization
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+5. **Yandex Translator Integration** (v0.9.67, #1652)
+   - Added Yandex Translator as translation provider
+   - Free translation service option
+   - Multiple Yandex service options (yandexgpt, yandextranslate, etc.)
+   - **See**: [translation-system/index.md](./translation-system/index.md)
+
+6. **iOS In-App Purchase (IAP)** (v0.9.67, #1673, #1676, #1678)
+   - Native IAP support for iOS
+   - Upgrade to Readest Premium via iOS
+   - Server-side receipt validation
+   - Sandbox environment for TestFlight
+   - **See**: [auth-sync/index.md](./auth-sync/index.md), [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+7. **PDF Custom Background Theming** (v0.9.67, #1661)
+   - Apply custom background colors to PDF files
+   - Dark mode support for PDFs
+   - Consistent theming across all formats
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+8. **Premium Cloud Storage** (v0.9.67, #1696)
+   - Increased cloud sync storage for premium users
+   - Enhanced backup capabilities
+   - Priority sync for premium accounts
+   - **See**: [auth-sync/index.md](./auth-sync/index.md)
+
+### Enhancements (0.9.64 - 0.9.67 Period)
+
+- **Window Borders**: Added window borders on Windows 10 (#1556) and Linux (#1570, #1599)
+- **Layout & CSS**:
+  - Fixed dimension of inline images (#1555, #1560)
+  - Lightened highlight color in dark mode (#1489, #1561)
+  - Removed unintended indent for images (#1567, #1568)
+  - Named container classes for easier CSS customization (#1598, #1600)
+  - Maintain layout of anchor elements while increasing tap target size (#1603, #1605)
+  - Unset text indent inside list elements (#1609)
+  - Fixed insets for double borders and added book spine decorator (#1688)
+  - Fixed hard-coded font color (#1695, #1697)
+  - Multiply img color in light mode when overriding book color (#1656)
+
+- **Full-text Search**: More responsive full-text search (#1558, #1562)
+
+- **Pull-down Refresh**: Smoother and more responsive (#1564)
+
+- **Bookmark Ribbon**: Correctly placed when sidebar is pinned (#1565)
+
+- **Translation**:
+  - Fixed translation not working for table of contents (#1610)
+  - Skip translating pre, code and math tags (#1693, #1698)
+
+- **Text-to-Speech**:
+  - Handle invalid language codes and show no voices hints (#1579, #1607)
+  - Skip TTS for rubys and footnote anchors (#1334, #1608)
+  - Convert ISO 639-2 language codes to ISO 639-1 for TTS voice filtering (#1627, #1639)
+
+- **Table of Contents**: Fixed nested TOC items not expanded in very long TOC lists (#1625, #1629)
+
+- **Book Cover**: Replace fallback book cover with new cover image (#1604), update book cover from metadata in sidebar (#1615)
+
+- **Metadata**: Also sync book metadata (#1611), various fixes on metadata editor and bookshelf (#1663)
+
+- **Performance**:
+  - Eliminate redundant re-renders of book cover components (#1685)
+  - Multi-part download with range access (#1690)
+
+- **Platform-Specific**:
+  - **iOS**: Skip context menu when long-press on book cover (#1612, #1613)
+  - **macOS**: Hover header to show traffic light window control (#1645, #1653)
+  - **Linux**: Fixed multiple instances created in OAuth (#1654, #1659)
+  - **Android**: Target Android SDK to version 36
+
+- **Layout**:
+  - Fixed hardcoded image layout in fixed layout documents (#1660)
+  - Fixed layout for auth and user page (#1637)
+
+- **File Handling**:
+  - Chaining file open with OS opening having highest precedence (#1622, #1636)
+  - Don't use comma as separator when parsing filenames (#1622, #1650)
+  - Set xdg-mime with mime type other than scheme (#1621, #1641)
+
+- **Library**:
+  - Fix book not redownloaded for the redownload button in detail modal (#1628, #1638)
+
+- **Error Handling**:
+  - Handle ChunkLoadError by refreshing page (#1619)
+  - Fix loading chunk error of optional chaining for Android WebView below 80 (#1626)
+
+- **Build & Infrastructure**:
+  - Bump Tauri, Next.js, and Zustand to latest versions (#1631)
+  - Fix CORS for API with new Next.js version (#1633)
+  - Downgrade Next.js to 15.3 for compatibility (#1634)
+  - Fixed failed AppImage builds for Linux
+  - Suppress warnings from old objc crate (#1686)
+
+- **Fonts**: Fix broken links for online CJK fonts (#1687)
+
+- **Library Data**: Load backup library data if main library data is unavailable (#1672, #1689)
+
+- **Configuration**: Default to open file with new window (#1691)
+
+- **API**:
+  - Batch updating daily usage key in KV (#1694)
+  - Ensure proper string decoded on edge runtimes (#1680)
+  - Use node API endpoint for IAP verifying (#1683)
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**Version**: Documentation for commits `571baf98` through `33b2ba16` (v0.9.64 → v0.9.67)
 **Last Updated**: November 2025
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `f5b686ab` for context on the codebase state at this point.**
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `33b2ba16` for context on the codebase state at this point.**
