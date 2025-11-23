@@ -999,6 +999,7 @@ None - all changes are backward compatible
 - **Settings**:
   - Invert image color in dark mode (#1223)
   - Opt-out telemetry option (#1236)
+  - Enable JavaScript in EPUB (#1295)
   - TOC sort by page number (#1308)
   - Remaining pages in chapter (#1478)
   - Remaining minutes in chapter (#1326)
@@ -1018,6 +1019,10 @@ None - all changes are backward compatible
   - Notebook layout tweaks (#1319)
   - Restore view settings when reopening (#1400)
   - Annotation tools work when TTS enabled (#1406)
+
+- **Authentication & Sync**:
+  - Sync status indicator in view menu (#1324)
+  - Deleted notes synchronization (#1357)
 
 - **Cross-Platform (iOS/iPad)**:
   - Split-screen mode support (#1416)
