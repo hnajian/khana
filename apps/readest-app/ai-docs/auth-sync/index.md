@@ -1977,5 +1977,354 @@ const StorageUsageDisplay = () => {
 
 ---
 
-**Last Updated:** Documentation for commits up to dd5371d2 (November 2025, v0.9.90)
+## Version 0.9.91 Updates (dd5371d2 → 8ee53d3)
+
+### Email Address Update Support (v0.9.91, #2437)
+
+**Feature**: Users can now update their Readest account email address from within the app.
+
+**Overview**: Previously, users who needed to change their email address had to contact support or create a new account. Now, users can update their email address directly through the settings interface with proper verification.
+
+**Use Cases**:
+- Changed primary email address
+- Old email account deactivated
+- Want to consolidate accounts
+- Typo in original registration
+- Privacy/security considerations
+
+**Security Workflow**:
+1. User initiates email change in account settings
+2. Verification email sent to **new** email address
+3. User clicks verification link
+4. Verification email sent to **old** email address (confirmation)
+5. User confirms change from old email
+6. Email address updated in account
+7. All devices notified of change
+
+**Implementation** (`src/app/settings/components/AccountSettings.tsx`):
+```typescript
+const EmailUpdateForm = () => {
+  const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleEmailUpdate = async () => {
+    setError(null);
+
+    // Validate new email
+    if (!isValidEmail(newEmail)) {
+      setError('Invalid email format');
+      return;
+    }
+
+    // Check if email already in use
+    const emailTaken = await checkEmailAvailability(newEmail);
+    if (emailTaken) {
+      setError('Email already in use by another account');
+      return;
+    }
+
+    try {
+      // Initiate email change process
+      await authService.initiateEmailChange({
+        currentPassword,
+        newEmail
+      });
+
+      setVerificationSent(true);
+      toast.success('Verification email sent to ' + newEmail);
+    } catch (error) {
+      if (error.code === 'INVALID_PASSWORD') {
+        setError('Incorrect password');
+      } else if (error.code === 'EMAIL_TAKEN') {
+        setError('Email already in use');
+      } else {
+        setError('Failed to update email. Please try again.');
+      }
+    }
+  };
+
+  return (
+    <div className="email-update-form">
+      <h3>Update Email Address</h3>
+
+      <div className="current-email">
+        <label>Current Email</label>
+        <p>{currentUser.email}</p>
+      </div>
+
+      <div className="form-group">
+        <label>New Email Address</label>
+        <input
+          type="email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          placeholder="new.email@example.com"
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Confirm Password</label>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          placeholder="Enter your current password"
+        />
+      </div>
+
+      {error && (
+        <div className="error-message">{error}</div>
+      )}
+
+      {!verificationSent ? (
+        <button
+          onClick={handleEmailUpdate}
+          disabled={!newEmail || !currentPassword}
+          className="btn btn-primary"
+        >
+          Update Email
+        </button>
+      ) : (
+        <div className="verification-notice">
+          <p>📧 Verification email sent!</p>
+          <p>Check your inbox at <strong>{newEmail}</strong></p>
+          <p>Click the link to verify your new email address.</p>
+
+          <button onClick={() => resendVerification(newEmail)}>
+            Resend Email
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+**Backend API** (`apps/readest-api/auth/email-change.ts`):
+```typescript
+export async function initiateEmailChange(req: Request, res: Response) {
+  const { currentPassword, newEmail } = req.body;
+  const userId = req.user.id;
+
+  // 1. Verify current password
+  const user = await supabase
+    .from('users')
+    .select('email, password_hash')
+    .eq('id', userId)
+    .single();
+
+  const passwordValid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!passwordValid) {
+    return res.status(401).json({ error: 'Invalid password', code: 'INVALID_PASSWORD' });
+  }
+
+  // 2. Check if new email available
+  const existingUser = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', newEmail)
+    .maybeSingle();
+
+  if (existingUser) {
+    return res.status(409).json({ error: 'Email already in use', code: 'EMAIL_TAKEN' });
+  }
+
+  // 3. Create verification token
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  await supabase.from('email_change_requests').insert({
+    user_id: userId,
+    old_email: user.email,
+    new_email: newEmail,
+    verification_token: verificationToken,
+    expires_at: expiresAt.toISOString(),
+    status: 'pending_new_email_verification'
+  });
+
+  // 4. Send verification email to new address
+  await sendEmailChangeVerification({
+    email: newEmail,
+    token: verificationToken,
+    userName: req.user.name
+  });
+
+  res.json({ success: true });
+}
+
+export async function verifyNewEmail(req: Request, res: Response) {
+  const { token } = req.query;
+
+  // 1. Find pending request
+  const request = await supabase
+    .from('email_change_requests')
+    .select('*')
+    .eq('verification_token', token)
+    .eq('status', 'pending_new_email_verification')
+    .single();
+
+  if (!request) {
+    return res.status(404).json({ error: 'Invalid or expired verification link' });
+  }
+
+  // 2. Check expiration
+  if (new Date(request.expires_at) < new Date()) {
+    return res.status(410).json({ error: 'Verification link expired' });
+  }
+
+  // 3. Update status and send confirmation to old email
+  await supabase
+    .from('email_change_requests')
+    .update({ status: 'pending_old_email_confirmation' })
+    .eq('id', request.id);
+
+  const confirmationToken = crypto.randomBytes(32).toString('hex');
+  await supabase
+    .from('email_change_requests')
+    .update({ confirmation_token: confirmationToken })
+    .eq('id', request.id);
+
+  // 4. Send confirmation email to old address
+  await sendEmailChangeConfirmation({
+    email: request.old_email,
+    newEmail: request.new_email,
+    token: confirmationToken
+  });
+
+  res.json({ success: true, message: 'Confirmation email sent to old address' });
+}
+
+export async function confirmEmailChange(req: Request, res: Response) {
+  const { token } = req.query;
+
+  // 1. Find request
+  const request = await supabase
+    .from('email_change_requests')
+    .select('*')
+    .eq('confirmation_token', token)
+    .eq('status', 'pending_old_email_confirmation')
+    .single();
+
+  if (!request) {
+    return res.status(404).json({ error: 'Invalid confirmation link' });
+  }
+
+  // 2. Update user email
+  await supabase
+    .from('users')
+    .update({ email: request.new_email })
+    .eq('id', request.user_id);
+
+  // 3. Mark request as completed
+  await supabase
+    .from('email_change_requests')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString()
+    })
+    .eq('id', request.id);
+
+  // 4. Notify user on all devices
+  await notifyEmailChanged(request.user_id, request.new_email);
+
+  res.json({ success: true });
+}
+```
+
+**Email Templates**:
+
+**New Email Verification**:
+```
+Subject: Verify your new email address for Readest
+
+Hi [User Name],
+
+You recently requested to change your Readest account email from [old@email.com] to [new@email.com].
+
+Click the link below to verify your new email address:
+
+[Verification Link]
+
+This link will expire in 24 hours.
+
+If you didn't request this change, please ignore this email.
+
+Thanks,
+The Readest Team
+```
+
+**Old Email Confirmation**:
+```
+Subject: Confirm email change for your Readest account
+
+Hi [User Name],
+
+Your new email address ([new@email.com]) has been verified.
+
+To complete the email change, click the link below to confirm:
+
+[Confirmation Link]
+
+After confirmation:
+- Your login email will be [new@email.com]
+- All notifications will be sent to [new@email.com]
+- Your account data and settings remain unchanged
+
+If you didn't request this change, click here to cancel and secure your account.
+
+Thanks,
+The Readest Team
+```
+
+**Security Features**:
+- Requires current password
+- Two-step verification (new + old email)
+- 24-hour expiration on verification links
+- Email availability check
+- Notification to all devices
+- Cancel option in confirmation email
+
+**Error Handling**:
+```typescript
+// Handle various error cases
+try {
+  await updateEmail(newEmail);
+} catch (error) {
+  switch (error.code) {
+    case 'INVALID_PASSWORD':
+      toast.error('Password is incorrect');
+      break;
+    case 'EMAIL_TAKEN':
+      toast.error('Email is already in use by another account');
+      break;
+    case 'VERIFICATION_EXPIRED':
+      toast.error('Verification link has expired. Please try again.');
+      break;
+    case 'NETWORK_ERROR':
+      toast.error('Network error. Please check your connection.');
+      break;
+    default:
+      toast.error('Failed to update email. Please try again later.');
+  }
+}
+```
+
+**Benefits**:
+- No need to contact support
+- Secure two-step verification
+- Maintains all user data and settings
+- Prevents accidental changes
+- Protects against account hijacking
+
+**Files**:
+- `src/app/settings/components/AccountSettings.tsx` - Email update UI
+- `src/services/authService.ts` - Frontend auth service
+- `apps/readest-api/auth/email-change.ts` - Backend email change logic
+- `apps/readest-api/email/templates/` - Email templates
+
+---
+
+**Last Updated:** Documentation updated through commit 8ee53d3 (Version 0.9.91, November 2025)
 **Related Documents:** [cross-platform-support](../cross-platform-support/index.md), [library-management](../library-management/index.md)

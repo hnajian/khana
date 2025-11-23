@@ -1709,5 +1709,277 @@ class TTSController {
 
 ---
 
-**Last Updated**: Documentation for commits through dd5371d2 (November 2025, v0.9.90)
+## Version 0.9.91 Updates (dd5371d2 → 8ee53d3)
+
+### Fixed TTS Event Listener (v0.9.91, #2349)
+
+**Fix**: Resolved issue with TTS event listeners not properly attached or firing.
+
+**Problem**: TTS playback state events (play, pause, stop, end) were not consistently triggering event listeners, causing UI desync and playback control issues.
+
+**Symptoms**:
+- Play/pause button not updating to correct state
+- TTS continuing to play after stop button clicked
+- Progress indicator frozen
+- Media session controls out of sync
+
+**Root Cause**: Event listeners were being attached multiple times or not properly cleaned up, leading to duplicate handlers or missing events.
+
+**Solution**: Implement proper event listener lifecycle management.
+
+**Implementation** (`src/app/reader/utils/tts/TTSController.ts`):
+```typescript
+class TTSController {
+  private eventListeners: Map<string, Set<Function>> = new Map();
+
+  // Properly manage event listeners
+  on(event: string, handler: Function) {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
+    }
+    this.eventListeners.get(event)!.add(handler);
+  }
+
+  off(event: string, handler: Function) {
+    const handlers = this.eventListeners.get(event);
+    if (handlers) {
+      handlers.delete(handler);
+    }
+  }
+
+  private emit(event: string, ...args: any[]) {
+    const handlers = this.eventListeners.get(event);
+    if (handlers) {
+      handlers.forEach(handler => {
+        try {
+          handler(...args);
+        } catch (error) {
+          console.error(`Error in TTS event handler for '${event}':`, error);
+        }
+      });
+    }
+  }
+
+  // Clean up all listeners
+  cleanup() {
+    this.eventListeners.clear();
+    this.stopPlayback();
+  }
+
+  // Proper playback state management
+  async play() {
+    this.emit('play-start');
+
+    try {
+      await this.backend.speak(this.currentSentence);
+      this.emit('sentence-end');
+    } catch (error) {
+      this.emit('error', error);
+    }
+  }
+
+  pause() {
+    this.backend.pause();
+    this.emit('pause');
+  }
+
+  stop() {
+    this.backend.stop();
+    this.emit('stop');
+  }
+}
+```
+
+**React Integration** (`src/app/reader/hooks/useTTSController.ts`):
+```typescript
+const useTTSController = () => {
+  const ttsController = useRef<TTSController>();
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    const controller = new TTSController();
+    ttsController.current = controller;
+
+    // Attach event listeners
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleStop = () => setIsPlaying(false);
+
+    controller.on('play-start', handlePlay);
+    controller.on('pause', handlePause);
+    controller.on('stop', handleStop);
+
+    // Cleanup on unmount
+    return () => {
+      controller.off('play-start', handlePlay);
+      controller.off('pause', handlePause);
+      controller.off('stop', handleStop);
+      controller.cleanup();
+    };
+  }, []);
+
+  return ttsController.current;
+};
+```
+
+**Key Fixes**:
+1. Centralized event listener registry
+2. Proper cleanup on component unmount
+3. Error handling in event handlers
+4. Prevents duplicate listener registration
+5. Ensures listeners are removed when TTS session ends
+
+**Benefits**:
+- UI state always in sync with playback state
+- No memory leaks from orphaned listeners
+- More reliable playback controls
+- Better error handling
+
+**Files**:
+- `src/app/reader/utils/tts/TTSController.ts` - Event management
+- `src/app/reader/hooks/useTTSController.ts` - React integration
+- `src/app/reader/components/TTSControls.tsx` - UI controls
+
+### Fixed Incorrectly Selected Voices (v0.9.91, #2426)
+
+**Fix**: Resolved issue where TTS would select wrong voice or fail to find matching voice for book language.
+
+**Problem**: Voice selection algorithm had several issues:
+1. Language code mismatch (e.g., `en` vs `en-US`)
+2. Fallback voice not properly selected when preferred voice unavailable
+3. Voice sorting didn't prioritize neural voices
+4. Gender preference not respected
+
+**Example Failure Cases**:
+- French book (`fr`) would select English voice
+- User preferred male voice but got female voice
+- Neural voice available but standard voice selected
+
+**Solution**: Improved voice matching algorithm with better fallback logic.
+
+**Implementation** (`src/app/reader/utils/tts/voiceSelection.ts`):
+```typescript
+interface VoiceSelectionOptions {
+  language: string;
+  gender?: 'male' | 'female';
+  preferNeural?: boolean;
+  voiceName?: string;  // Specific voice if user has selected one
+}
+
+const selectBestVoice = (
+  availableVoices: Voice[],
+  options: VoiceSelectionOptions
+): Voice | null => {
+  const { language, gender, preferNeural = true, voiceName } = options;
+
+  // 1. If user specified a voice name, use that
+  if (voiceName) {
+    const exactMatch = availableVoices.find(v => v.name === voiceName);
+    if (exactMatch) return exactMatch;
+  }
+
+  // 2. Normalize language code for matching
+  const normalizedLang = normalizeLanguageCode(language); // 'en-US' -> 'en'
+
+  // 3. Filter voices by language
+  let matchingVoices = availableVoices.filter(v => {
+    const voiceLang = normalizeLanguageCode(v.lang);
+    return voiceLang === normalizedLang;
+  });
+
+  if (matchingVoices.length === 0) {
+    // Fallback: Try partial match (e.g., 'en-GB' matches 'en')
+    matchingVoices = availableVoices.filter(v =>
+      v.lang.toLowerCase().startsWith(normalizedLang)
+    );
+  }
+
+  if (matchingVoices.length === 0) {
+    // Last resort: Default to English or first available voice
+    matchingVoices = availableVoices.filter(v => v.lang.startsWith('en'));
+    if (matchingVoices.length === 0) {
+      return availableVoices[0] || null;
+    }
+  }
+
+  // 4. Filter by gender if specified
+  if (gender) {
+    const genderMatches = matchingVoices.filter(v =>
+      v.gender?.toLowerCase() === gender
+    );
+    if (genderMatches.length > 0) {
+      matchingVoices = genderMatches;
+    }
+  }
+
+  // 5. Sort by quality (neural > standard)
+  matchingVoices.sort((a, b) => {
+    // Prioritize neural voices
+    if (preferNeural) {
+      const aIsNeural = a.name.includes('Neural');
+      const bIsNeural = b.name.includes('Neural');
+      if (aIsNeural && !bIsNeural) return -1;
+      if (!aIsNeural && bIsNeural) return 1;
+    }
+
+    // Then by locale specificity (exact match > regional)
+    const aExactMatch = a.lang.toLowerCase() === language.toLowerCase();
+    const bExactMatch = b.lang.toLowerCase() === language.toLowerCase();
+    if (aExactMatch && !bExactMatch) return -1;
+    if (!aExactMatch && bExactMatch) return 1;
+
+    return 0;
+  });
+
+  return matchingVoices[0] || null;
+};
+```
+
+**Voice Priority Logic**:
+1. **User preference** (if explicitly selected voice)
+2. **Exact language match** (e.g., `fr-FR` for French book)
+3. **Partial language match** (e.g., `fr-CA` acceptable for `fr` book)
+4. **Gender preference** (male/female if specified)
+5. **Voice quality** (neural > standard)
+6. **Fallback to English** (if no language match found)
+7. **First available voice** (last resort)
+
+**Auto Voice Selection** (`src/app/reader/components/TTSPanel.tsx`):
+```typescript
+const selectVoiceForBook = (book: BookMetadata) => {
+  const bookLanguage = book.metadata?.language || 'en';
+
+  const selectedVoice = selectBestVoice(availableVoices, {
+    language: bookLanguage,
+    preferNeural: true,
+  });
+
+  if (selectedVoice) {
+    setVoice(selectedVoice);
+    toast.success(`Selected voice: ${selectedVoice.name}`);
+  } else {
+    toast.warning(`No voice found for language: ${bookLanguage}`);
+  }
+};
+```
+
+**User Override**: Users can still manually select any voice, which takes precedence over auto-selection.
+
+**Benefits**:
+- Correct voice selected for book language
+- Better fallback behavior
+- Respects user preferences
+- Prioritizes higher quality neural voices
+- More intuitive voice selection
+
+**Related Commit**: Closes #2386
+
+**Files**:
+- `src/app/reader/utils/tts/voiceSelection.ts` - Voice matching logic
+- `src/app/reader/components/TTSPanel.tsx` - Voice UI
+- `src/utils/language.ts` - Language normalization
+
+---
+
+**Last Updated**: Documentation updated through commit 8ee53d3 (Version 0.9.91, November 2025)
 **Related Documents**: [translation-system](../translation-system/index.md), [annotation-system](../annotation-system/index.md), [cross-platform-support](../cross-platform-support/index.md)
