@@ -369,11 +369,247 @@ const preserveSelectionAnchor = (selection: Selection) => {
 - Improved z-index handling
 - Better positioning on small screens
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Markdown Note Support (v0.9.52, #1315)
+
+**Major Feature**: Support for note taking with markdown formatting.
+
+**Overview**: Users can now write notes with markdown syntax, including headers, lists, code blocks, links, and more.
+
+**Supported Markdown Features**:
+- **Headers**: `# H1`, `## H2`, `### H3`
+- **Emphasis**: `*italic*`, `**bold**`, `***bold italic***`
+- **Lists**: Ordered (`1.`) and unordered (`-`, `*`)
+- **Links**: `[text](url)`
+- **Code**: Inline `` `code` `` and code blocks ` ``` `
+- **Blockquotes**: `> quote`
+- **Tables**: GitHub-flavored markdown tables
+- **Checklists**: `- [ ]` and `- [x]`
+
+**Implementation** (`src/app/reader/components/notebook/NoteEditor.tsx`):
+```typescript
+import ReactMarkdown from 'react-markdown';
+
+function NoteEditor({ note, onChange }: NoteEditorProps) {
+  const [markdown, setMarkdown] = useState(note.content);
+  const [isPreview, setIsPreview] = useState(false);
+
+  return (
+    <div className="note-editor">
+      <div className="editor-toolbar">
+        <button onClick={() => setIsPreview(!isPreview)}>
+          {isPreview ? 'Edit' : 'Preview'}
+        </button>
+      </div>
+
+      {isPreview ? (
+        <ReactMarkdown className="markdown-preview">
+          {markdown}
+        </ReactMarkdown>
+      ) : (
+        <textarea
+          value={markdown}
+          onChange={(e) => setMarkdown(e.target.value)}
+          placeholder="Write your note in markdown..."
+        />
+      )}
+    </div>
+  );
+}
+```
+
+**UI Components**:
+- Split editor/preview mode
+- Toolbar with markdown shortcuts
+- Syntax highlighting for code blocks
+- Live preview toggle
+- Export notes as markdown files
+
+**Files**:
+- `src/app/reader/components/notebook/NoteEditor.tsx` - Markdown editor
+- `src/app/reader/components/notebook/MarkdownToolbar.tsx` - Formatting toolbar
+- `src/store/notebookStore.ts` - Updated to store markdown content
+
+**Styling**: Custom CSS for markdown rendering with book theme integration.
+
+### Notebook Search Functionality (v0.9.52, #1318)
+
+**Feature**: Search annotations and notes by keyword.
+
+**Search Capabilities**:
+- Full-text search across all notes and highlights
+- Search by note content
+- Search by highlighted text
+- Search by book title/author
+- Filter by book
+- Filter by color
+- Sort by date created/modified
+
+**Implementation** (`src/app/reader/components/notebook/NotebookSearch.tsx`):
+```typescript
+interface SearchOptions {
+  query: string;
+  bookFilter?: string;      // Filter by specific book
+  colorFilter?: string;     // Filter by highlight color
+  type?: 'highlight' | 'note' | 'all';
+  sortBy?: 'created' | 'modified' | 'relevance';
+}
+
+function searchNotes(options: SearchOptions): Note[] {
+  const { query, bookFilter, colorFilter, type, sortBy } = options;
+
+  let results = getAllNotes();
+
+  // Filter by book
+  if (bookFilter) {
+    results = results.filter(n => n.bookHash === bookFilter);
+  }
+
+  // Filter by type
+  if (type && type !== 'all') {
+    results = results.filter(n => n.type === type);
+  }
+
+  // Filter by color
+  if (colorFilter) {
+    results = results.filter(n => n.color === colorFilter);
+  }
+
+  // Full-text search
+  if (query) {
+    results = results.filter(n =>
+      n.text.toLowerCase().includes(query.toLowerCase()) ||
+      n.note?.toLowerCase().includes(query.toLowerCase())
+    );
+  }
+
+  // Sort results
+  switch (sortBy) {
+    case 'created':
+      results.sort((a, b) => b.created - a.created);
+      break;
+    case 'modified':
+      results.sort((a, b) => (b.updated || b.created) - (a.updated || a.created));
+      break;
+    case 'relevance':
+      // Score by query match frequency
+      results.sort((a, b) => scoreRelevance(b, query) - scoreRelevance(a, query));
+      break;
+  }
+
+  return results;
+}
+```
+
+**UI Features**:
+- Search bar in notebook panel
+- Real-time search as you type
+- Search result highlighting
+- Click result to jump to location in book
+- Clear search button
+- Search history dropdown
+
+**Keyboard Shortcuts**:
+- `Ctrl/Cmd+F` - Focus search bar (in notebook)
+- `Esc` - Clear search
+- `Enter` - Jump to first result
+- `↑/↓` - Navigate results
+
+**Files**:
+- `src/app/reader/components/notebook/NotebookSearch.tsx`
+- `src/app/reader/components/notebook/SearchResults.tsx`
+- `src/store/notebookStore.ts` - Search state management
+
+### Notebook Layout Tweaks (v0.9.52, #1319)
+
+**Enhancement**: Improved notebook layout for better readability and organization.
+
+**Changes**:
+- Responsive card-based layout
+- Better spacing between notes
+- Collapsible sections for highlights vs notes
+- Sticky headers for sections
+- Improved mobile layout
+- Touch-friendly interaction areas
+
+**File**: `src/app/reader/components/notebook/NotebookLayout.tsx`
+
+### Show Annotation Create Time (v0.9.58, #1412)
+
+**Feature**: Display creation time and last modified time for each annotation.
+
+**UI**:
+- Timestamp shown below each note/highlight
+- Relative time format ("2 hours ago", "3 days ago")
+- Absolute time on hover (tooltip)
+- Sort notes by creation time or modification time
+
+**Implementation** (`src/app/reader/components/notebook/AnnotationCard.tsx`):
+```typescript
+function AnnotationCard({ annotation }: AnnotationCardProps) {
+  const { created, updated } = annotation;
+
+  return (
+    <div className="annotation-card">
+      {/* ... annotation content ... */}
+
+      <div className="annotation-metadata">
+        <span className="timestamp" title={new Date(created).toLocaleString()}>
+          Created {formatRelativeTime(created)}
+        </span>
+        {updated && updated !== created && (
+          <span className="timestamp-modified" title={new Date(updated).toLocaleString()}>
+            Modified {formatRelativeTime(updated)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  return 'Just now';
+}
+```
+
+**Files**:
+- `src/app/reader/components/notebook/AnnotationCard.tsx`
+- `src/utils/time.ts` - Time formatting utilities
+
+### Restore Full View Settings When Reopening Book (v0.9.57, #1400)
+
+**Feature**: Annotation-related view settings are now properly restored when reopening a book.
+
+**Restored Settings**:
+- Highlight visibility toggle state
+- Note panel expansion state
+- Selected annotation (if editing when closed)
+- Scroll position in notebook
+
+**Implementation**:
+- Settings saved in BookConfig.viewSettings
+- Automatic restoration on book load
+- Graceful degradation if settings invalid
+
+---
+
 ## Dependencies
 
 - **foliate-js**: Provides selection and annotation overlay APIs
 - **zustand**: State management for annotations
 - **react-icons**: Icons for annotation UI
+- **react-markdown**: Markdown rendering for notes
 - **External APIs**: DeepL (translation), Wikipedia, Wiktionary
 
 ## Performance Considerations
@@ -382,3 +618,4 @@ const preserveSelectionAnchor = (selection: Selection) => {
 - **Debounce saves**: Don't save on every keystroke in note editor
 - **Lazy load popups**: Dynamic import heavy components (e.g., DeepL API)
 - **Optimize re-renders**: Use React.memo for popup components
+- **Search indexing**: Consider indexing notes for faster full-text search on large libraries
