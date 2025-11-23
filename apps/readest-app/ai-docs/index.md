@@ -710,6 +710,21 @@ These sections will be added in future documentation updates.
     - Background audio on iOS (#822)
     - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
 
+12. **Reader UI and Interaction Enhancements** (v0.9.20-0.9.27)
+    - Continuous scroll option (#522)
+    - Settings preview snap dialog for mobile (#646)
+    - Global fulltext search shortcut (Ctrl/Cmd+F, #750)
+    - Click-to-flip area swap (#727)
+    - Show/hide header/footer widgets (#620)
+    - Scrolled mode toggler in layout panel (#596)
+    - **See**: [settings-system/reader-ui-settings.md](./settings-system/reader-ui-settings.md)
+
+13. **PWA and Web Platform Updates**
+    - Cloudflare deployment with OpenNext (ede37757)
+    - R2 storage integration (#718)
+    - Screen wake lock focus/visibility handling (#502, #505)
+    - **See**: [cross-platform-support/pwa-enhancements.md](./cross-platform-support/pwa-enhancements.md), [settings-system/screen-wake-lock.md](./settings-system/screen-wake-lock.md)
+
 ### Enhancements (0.9.19 - 0.9.31 Period)
 
 - **Settings**: Reset password page (#731), language preference options (#686)
