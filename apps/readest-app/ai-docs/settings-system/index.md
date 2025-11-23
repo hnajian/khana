@@ -819,5 +819,292 @@ const determineColumns = (orientation: 'portrait' | 'landscape', userPref: numbe
 
 ---
 
-**Last Updated**: Documentation for commits through f5b686ab (November 2025, v0.9.63)
+## Version 0.9.68 - 0.9.78 Updates (33b2ba16 → cc3cc58d)
+
+### Custom Fonts Support (v0.9.75, #1864)
+
+**Major Feature**: Import and use custom TTF/OTF fonts in Readest.
+
+**Overview**: Users can now import their own font files and use them for reading, providing greater customization and support for specialized fonts.
+
+**Supported Font Formats**:
+- TrueType fonts (.ttf)
+- OpenType fonts (.otf)
+- Font collections (.ttc) - extracts individual fonts
+
+**Implementation** (`src/app/reader/components/settings/FontPanel.tsx`):
+```typescript
+const CustomFontImporter = () => {
+  const handleImport = async () => {
+    // Open file picker
+    const files = await appService.selectFiles({
+      filters: [{
+        name: 'Fonts',
+        extensions: ['ttf', 'otf', 'ttc']
+      }],
+      multiple: true
+    });
+
+    // Import each font
+    for (const file of files) {
+      try {
+        // Parse font metadata
+        const fontData = await parseFontFile(file);
+
+        // Store font in app storage
+        await appService.saveFontFile(file, fontData.fontFamily);
+
+        // Add to available fonts list
+        customFonts.push({
+          fontFamily: fontData.fontFamily,
+          fontStyle: fontData.fontStyle,
+          fontWeight: fontData.fontWeight,
+          filePath: fontData.filePath
+        });
+
+        toast.success(`Imported "${fontData.fontFamily}"`);
+      } catch (error) {
+        toast.error(`Failed to import ${file.name}: ${error.message}`);
+      }
+    }
+
+    // Refresh font list
+    refreshFonts();
+  };
+
+  return (
+    <button onClick={handleImport}>
+      Import Custom Fonts
+    </button>
+  );
+};
+```
+
+**Font Parsing** (#1876, #1881):
+- Extracts font family name from font file metadata
+- Parses font style (Regular, Bold, Italic, Bold Italic)
+- Detects font weight variants (100-900)
+- Handles font collections (.ttc) with multiple fonts
+
+**UI Features**:
+
+1. **Font Preview**:
+   - Preview text shown in each font
+   - Different preview text for different scripts (Latin, CJK, Arabic)
+   - Font weight variants displayed
+
+2. **Font Management**:
+   - List of all imported custom fonts
+   - Delete unwanted fonts
+   - Rename font display names
+   - Organize into font families
+
+3. **Application**:
+   - Select custom font from font dropdown
+   - Available in all font selection contexts
+   - Works across all book formats (EPUB, PDF)
+
+**Files**:
+- `src/app/reader/components/settings/FontPanel.tsx` - Font import UI
+- `src/utils/fontParser.ts` - Font metadata extraction
+- `src/services/appService.ts` - Font file storage
+- `src/store/settingsStore.ts` - Custom fonts state
+
+### Grouped Custom Fonts (v0.9.76, #1945)
+
+**Feature**: Group custom fonts into families for better organization.
+
+**Overview**: Custom fonts with the same family name but different styles (Regular, Bold, Italic) are now grouped together in the font selector.
+
+**Font Family Structure**:
+```typescript
+interface FontFamily {
+  familyName: string;
+  fonts: Array<{
+    style: 'Regular' | 'Bold' | 'Italic' | 'Bold Italic';
+    weight: number;
+    filePath: string;
+  }>;
+}
+```
+
+**UI Display**:
+```
+▼ Noto Serif
+  ├─ Regular (400)
+  ├─ Bold (700)
+  ├─ Italic (400)
+  └─ Bold Italic (700)
+
+▼ Roboto
+  ├─ Thin (100)
+  ├─ Light (300)
+  ├─ Regular (400)
+  ├─ Medium (500)
+  └─ Bold (700)
+```
+
+**Auto-Grouping Logic** (`src/utils/fontGrouping.ts`):
+```typescript
+const groupFonts = (fonts: CustomFont[]): FontFamily[] => {
+  const families = new Map<string, FontFamily>();
+
+  for (const font of fonts) {
+    const familyName = font.fontFamily;
+
+    if (!families.has(familyName)) {
+      families.set(familyName, {
+        familyName,
+        fonts: []
+      });
+    }
+
+    families.get(familyName).fonts.push({
+      style: font.fontStyle,
+      weight: font.fontWeight,
+      filePath: font.filePath
+    });
+  }
+
+  return Array.from(families.values());
+};
+```
+
+**Benefits**:
+- Cleaner font selector UI
+- Easy identification of font variants
+- Automatic variant selection (bold, italic)
+- Better organization for large font collections
+
+**Files**:
+- `src/utils/fontGrouping.ts` - Font family grouping logic
+- `src/app/reader/components/settings/FontPanel.tsx` - Grouped display UI
+
+### Font Panel Layout Improvements (v0.9.75, #1870, #1871, #1903)
+
+**Layout Enhancements**:
+
+1. **Custom Fonts Panel** (#1870):
+   - Dedicated panel for managing custom fonts
+   - Grid layout for font cards
+   - Font preview in each card
+   - Quick apply button
+
+2. **Layout Tweaks** (#1871):
+   - Better spacing and alignment
+   - Responsive grid columns
+   - Improved mobile layout
+   - Touch-friendly controls
+
+3. **Font Name Overflow** (#1903):
+   - Long font names truncated with ellipsis
+   - Tooltip shows full font name on hover
+   - Prevents layout breaking
+
+**Implementation** (`src/app/reader/components/settings/CustomFontsPanel.tsx`):
+```typescript
+<div className="custom-fonts-grid">
+  {customFonts.map(font => (
+    <div key={font.id} className="font-card">
+      <div
+        className="font-preview"
+        style={{ fontFamily: font.fontFamily }}
+      >
+        The quick brown fox jumps over the lazy dog
+      </div>
+
+      <div className="font-name" title={font.fontFamily}>
+        {truncateText(font.fontFamily, 20)}
+      </div>
+
+      <div className="font-actions">
+        <button onClick={() => applyFont(font)}>
+          Apply
+        </button>
+        <button onClick={() => deleteFont(font)}>
+          Delete
+        </button>
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+**Files**:
+- `src/app/reader/components/settings/CustomFontsPanel.tsx` - Custom fonts UI
+- `src/styles/fonts.css` - Font panel styling
+
+### Purge Custom Fonts on Reset (v0.9.76, #1906)
+
+**Feature**: Custom fonts are now removed when resetting font configuration.
+
+**Behavior**:
+- "Reset to Defaults" button in font settings
+- Confirmation dialog warns about custom font deletion
+- Removes all custom font files from storage
+- Clears custom fonts from font list
+- Reverts to default system fonts
+
+**Implementation**:
+```typescript
+const resetFontsConfig = async () => {
+  const confirmed = await confirm(
+    'Reset font configuration?',
+    'This will remove all custom fonts and reset to default settings.'
+  );
+
+  if (!confirmed) return;
+
+  // Delete all custom font files
+  for (const font of customFonts) {
+    await appService.deleteFontFile(font.filePath);
+  }
+
+  // Clear custom fonts list
+  setCustomFonts([]);
+
+  // Reset font settings to defaults
+  settingsStore.setSettings({
+    fontFamily: DEFAULT_FONT,
+    fontSize: DEFAULT_FONT_SIZE,
+    lineHeight: DEFAULT_LINE_HEIGHT
+  });
+
+  toast.success('Font configuration reset to defaults.');
+};
+```
+
+**Files**:
+- `src/app/reader/components/settings/FontPanel.tsx` - Reset functionality
+
+### Fixed Broken CJK Font Links (v0.9.67, #1687)
+
+**Fix**: Resolved broken links for online CJK fonts.
+
+**Problem**: Some CJK fonts were loading from deprecated or broken CDN URLs, causing fallback to system fonts.
+
+**Solution**: Updated font URLs to reliable CDN sources:
+
+```typescript
+const CJK_FONTS = {
+  'Noto Serif CJK': 'https://fonts.googleapis.com/css2?family=Noto+Serif+SC',
+  'Noto Sans CJK': 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC',
+  'Source Han Serif': 'https://cdn.jsdelivr.net/npm/source-han-serif-sc/dist/SourceHanSerifSC-Regular.otf',
+  'LXGW WenKai': 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@latest/style.css'
+};
+```
+
+**Affected Fonts**:
+- Noto Serif JP
+- Noto Sans CJK
+- Source Han Serif
+- LXGW WenKai
+
+**Files**:
+- `src/utils/fonts.ts` - Font URL configuration
+- `src/components/FontLoader.tsx` - Online font loading
+
+---
+
+**Last Updated**: Documentation for commits through cc3cc58d (November 2025, v0.9.78)
 **Related Documents**: [reader-ui-settings](./reader-ui-settings.md), [custom-css-editor](./custom-css-editor.md), [cross-platform-support](../cross-platform-support/index.md)

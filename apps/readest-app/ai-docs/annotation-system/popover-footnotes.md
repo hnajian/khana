@@ -250,4 +250,103 @@ function closePopup() {
 
 ---
 
+## Version 0.9.68 - 0.9.78 Updates (33b2ba16 → cc3cc58d)
+
+### Handle Empty Footnotes (v0.9.75, #1883)
+
+**Fix**: Gracefully handle empty or whitespace-only footnotes without displaying blank popups.
+
+**Problem**: Some EPUB files contain empty footnote references, causing:
+- Blank popup appearing when clicking footnote link
+- User confusion (clicking but seeing nothing)
+- Visual clutter from empty popups
+
+**Solution**: Check footnote content before showing popup:
+
+```typescript
+function handleFootnotePopupEvent(event) {
+  const { href, doc } = event;
+
+  // Extract footnote content
+  const footnoteElement = doc.querySelector(href);
+  const footnoteText = footnoteElement?.textContent?.trim() || '';
+
+  // Don't show popup if footnote is empty
+  if (!footnoteText || footnoteText.length === 0) {
+    console.warn('Skipping empty footnote:', href);
+    return;
+  }
+
+  // Show popup with content
+  setFootnoteContent(footnoteElement);
+  setShowPopup(true);
+}
+```
+
+**Additional Validation**:
+- Check for whitespace-only content
+- Validate footnote element exists
+- Handle missing target IDs gracefully
+- Log warnings for debugging
+
+**Files**:
+- `src/app/reader/components/FootnotePopup.tsx` - Empty footnote handling
+
+### Display Hidden Footnotes (v0.9.76, #1907)
+
+**Feature**: Display footnotes that are hidden in the original book layout.
+
+**Problem**: Some EPUB files hide footnotes with CSS (`display: none` or `visibility: hidden`), making them:
+- Inaccessible via normal navigation
+- Invisible in the main reading flow
+- Still referenced by footnote links
+
+**Solution**: Override hiding CSS in footnote popup:
+
+```typescript
+function handleBeforeRender(doc) {
+  // Apply reader theme colors
+  doc.body.style.color = theme.foregroundColor;
+  doc.body.style.backgroundColor = theme.backgroundColor;
+
+  // Force display of hidden footnotes
+  const footnoteElements = doc.querySelectorAll('[epub\\:type="footnote"], aside, .footnote');
+  footnoteElements.forEach(element => {
+    element.style.display = 'block';
+    element.style.visibility = 'visible';
+    element.style.opacity = '1';
+  });
+
+  // Remove any hiding classes
+  doc.querySelectorAll('.hidden, .invisible').forEach(element => {
+    element.classList.remove('hidden', 'invisible');
+  });
+}
+```
+
+**CSS Override**:
+```css
+/* Injected into footnote popup */
+[epub\:type="footnote"],
+aside.footnote,
+.footnote {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+```
+
+**Benefits**:
+- Access all footnotes regardless of original styling
+- Consistent footnote display
+- Better reading experience for books with hidden footnotes
+- No modification to original book files
+
+**Files**:
+- `src/app/reader/components/FootnotePopup.tsx` - CSS override logic
+- `src/styles/footnote.css` - Footnote display CSS
+
+---
+
+**Last Updated**: Documentation for commits through cc3cc58d (November 2025, v0.9.78)
 **Related**: [index.md](./index.md) (Main annotation system documentation)

@@ -1210,7 +1210,113 @@ None - all changes are backward compatible
 
 ---
 
-**Version**: Documentation for commits `571baf98` through `33b2ba16` (v0.9.64 → v0.9.67)
+## Version 0.9.68 - 0.9.78 Updates (33b2ba16 → cc3cc58d)
+
+### Major Features Added (November 2025)
+
+1. **Reading Progress Format Configuration** (v0.9.69, #1761)
+   - Configurable progress display format (location, percentage, time remaining)
+   - Decimal percentage option
+   - Per-book progress format preferences
+   - i18n support for progress formatting
+   - **See**: [library-management/reading-progress-indicators.md](./library-management/reading-progress-indicators.md)
+
+2. **Delete Local Copy Feature** (v0.9.70, #1773)
+   - Delete only the local copy of a book while keeping cloud backup
+   - Reduces local storage usage without losing cloud data
+   - Independent deletion options for local and cloud copies
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+3. **Custom Fonts Support** (v0.9.75, #1864, #1870, #1871, #1945)
+   - Import TTF/OTF font files
+   - Font family and style parsing
+   - Custom fonts panel with preview
+   - Group custom fonts into families (#1945)
+   - Font weight variants display
+   - Purge custom fonts when resetting font config (#1906)
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+4. **Author Sorting (Last Name First)** (v0.9.75, #1865)
+   - Sort books by author with last name first
+   - Support for Arabic, English, and other languages
+   - Configurable sorting order
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+5. **PDF Custom Background Theming** (v0.9.67, #1661)
+   - Apply custom background colors to PDF files
+   - Dark mode support for PDFs
+   - Consistent theming across EPUB and PDF formats
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+6. **Font Improvements** (v0.9.75-0.9.76, #1876, #1881, #1903)
+   - Parse font family and font style when importing fonts (#1876)
+   - Handle font name overflow in custom fonts panel (#1903)
+   - Better font preview on all platforms
+   - Fixed broken links for online CJK fonts (#1687)
+
+7. **Footnote Enhancements** (v0.9.75-0.9.76, #1883, #1907)
+   - Handle empty footnotes gracefully (#1883)
+   - Display hidden footnotes (#1907)
+   - Improved footnote rendering
+   - **See**: [annotation-system/popover-footnotes.md](./annotation-system/popover-footnotes.md)
+
+8. **Library Data Resilience** (v0.9.67, #1689)
+   - Load backup library data if main library data is unavailable
+   - Automatic recovery from corrupted library data
+   - Improved data reliability
+   - **See**: [library-management/index.md](./library-management/index.md)
+
+9. **Translation Improvements** (v0.9.67, #1698)
+   - Skip translating `<pre>`, `<code>`, and `<math>` tags
+   - Better translation quality for technical books
+   - Preserve code syntax and mathematical expressions
+   - **See**: [translation-system/index.md](./translation-system/index.md)
+
+### Enhancements (0.9.68 - 0.9.78 Period)
+
+- **Performance**:
+  - Multi-part download with range access (#1690)
+  - Eliminate redundant re-renders of book cover components (#1685)
+  - TTS audio object reuse for better performance (#1853)
+
+- **Library Management**:
+  - Improved file selection hook for all file operations (#1905)
+  - Better import/export workflows
+
+- **Settings**:
+  - Default to open files with new window (#1691)
+  - CSS hard-coded font color fix (#1697)
+
+- **Layout**:
+  - Fixed insets for double borders (#1688)
+  - Book spine decorator (#1688)
+  - Multiply img color in light mode when overriding book color (#1656)
+
+- **API**:
+  - Batch updating daily usage key in KV (#1694)
+  - Ensure proper string decoded on edge runtimes (#1680)
+  - Use node API endpoint for IAP verifying (#1683)
+
+- **TXT File Support**:
+  - More robust TXT parsing (#1706)
+  - Trim punctuations in parsed author names (#1707)
+  - Fix language detection when parsing TXT files (#1723)
+
+- **Metadata**:
+  - Fix formatting for subjects (#1727)
+
+- **Build & Infrastructure**:
+  - Unified path resolver on all platforms (#1730)
+  - Bump to upstream foliate-js (#1732)
+  - Suppress warnings from old objc crate (#1686)
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**Version**: Documentation for commits `571baf98` through `cc3cc58d` (v0.9.64 → v0.9.78)
 **Last Updated**: November 2025
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `33b2ba16` for context on the codebase state at this point.**
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `cc3cc58d` for context on the codebase state at this point.**
