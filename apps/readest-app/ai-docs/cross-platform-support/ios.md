@@ -874,6 +874,336 @@ useEffect(() => {
 }
 ```
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### iPad Split-Screen Mode (v0.9.58, #1416)
+
+**Major Feature**: Native iPad split-screen and slide-over support.
+
+**Overview**: Readest now fully supports iPad's multitasking features, allowing users to run Readest side-by-side with other apps.
+
+**Supported Modes**:
+1. **Split View**: Readest alongside another app (50/50 or 70/30 split)
+2. **Slide Over**: Readest as floating window over another app
+3. **Picture in Picture**: Video/media playback in floating window (if applicable)
+
+**Implementation** (`src-tauri/src/ios/multitasking.rs`):
+```rust
+// Enable multitasking in Info.plist
+<key>UIRequiresFullScreen</key>
+<false/>
+
+<key>UISupportedInterfaceOrientations~ipad</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+  <string>UIInterfaceOrientationLandscapeLeft</string>
+  <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+```
+
+**Responsive Layout**:
+- Adaptive sidebar width based on available space
+- Reflow content when split ratio changes
+- Hide/show UI elements based on compact vs regular size classes
+
+**Window Size Detection** (`src/hooks/useWindowSize.ts`):
+```typescript
+const useWindowSize = () => {
+  const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+
+      // Adjust layout for iPad split-screen
+      if (isIPad && window.innerWidth < 768) {
+        // Compact mode: single column, hide sidebar
+        adjustForCompactMode();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return size;
+};
+```
+
+**Files**:
+- `src-tauri/Info.plist` - Multitasking enablement
+- `src/components/Layout.tsx` - Responsive layout
+- `src/hooks/useWindowSize.ts` - Size detection
+
+### Resizable Sidebars on iPad (v0.9.58, #1415)
+
+**Feature**: Drag to resize sidebar width on iPad for better multitasking.
+
+**Implementation**:
+- Drag handle on sidebar edge
+- Min width: 200px, Max width: 400px
+- Preference persisted per device
+- Smooth animation during resize
+
+**Drag Handler** (`src/components/Sidebar.tsx`):
+```typescript
+const handleDrag = (e: TouchEvent) => {
+  const deltaX = e.touches[0].clientX - dragStartX;
+  const newWidth = Math.max(200, Math.min(400, initialWidth + deltaX));
+
+  setSidebarWidth(newWidth);
+  localStorage.setItem('sidebarWidth_iPad', String(newWidth));
+};
+```
+
+**UI**:
+- Vertical drag handle with subtle indicator
+- Touch-friendly hit area (44px min)
+- Visual feedback during drag
+
+**Fix** (v0.9.58, #1415):
+- Previously, sidebars couldn't be dragged on iPad due to touch event conflicts
+- Resolved by separating touch handlers for drag vs scroll
+
+**File**: `src/components/Sidebar.tsx`
+
+### Safe Area Insets Support (v0.9.58, #1408)
+
+**Feature**: Responsive safe area insets for notch and home indicator on modern iPads.
+
+**Implementation**:
+- Use `env(safe-area-inset-*)` CSS variables
+- Automatic padding adjustment
+- Per-orientation handling
+
+**CSS** (`src/styles/ios-safe-area.css`):
+```css
+.reader-container {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* iPad Pro 12.9" landscape safe areas */
+@media (orientation: landscape) and (min-width: 1024px) {
+  .header {
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
+  }
+}
+```
+
+**Platform Detection** (`src/utils/platform.ts`):
+```typescript
+const hasNotch = () => {
+  // Detect iPad models with notch/Face ID
+  const safeAreaTop = getComputedStyle(document.documentElement)
+    .getPropertyValue('--sat') || '0px';
+
+  return parseInt(safeAreaTop) > 20;
+};
+```
+
+**Affected Components**:
+- Header bar
+- Footer bar
+- Sidebar
+- Modal dialogs
+- Full-screen reader view
+
+**Files**:
+- `src/styles/ios-safe-area.css`
+- `src/components/Header.tsx`
+- `src/components/Footer.tsx`
+
+### Import Reliability Improvements (v0.9.59, #1439)
+
+**Fix**: More reliable book imports on iOS at first launch.
+
+**Issue**: Books imported from Files app or shared via Share Sheet occasionally failed to import on fresh install.
+
+**Root Cause**:
+- File permissions not granted before import attempt
+- Async initialization race condition
+- Temporary file cleanup too aggressive
+
+**Solution**:
+```typescript
+// Wait for file system ready before allowing import
+const initializeImport = async () => {
+  // Request file access permission first
+  await requestFilePermission();
+
+  // Ensure temp directory exists
+  await ensureTempDirectory();
+
+  // Initialize import handlers
+  registerImportHandlers();
+};
+
+// Call on app start
+await initializeImport();
+```
+
+**Additional Improvements**:
+- Longer timeout for file copy operations
+- Better error messages for permission issues
+- Automatic retry on transient failures
+
+**Files**:
+- `src-tauri/src/ios/import.rs`
+- `src/services/importService.ts`
+
+### Smoother Orientation Changes (v0.9.59, #1441)
+
+**Enhancement**: Smoother transition when rotating iPad between portrait and landscape.
+
+**Issues Fixed**:
+- Flash of unstyled content during rotation
+- Layout shift and reflow jank
+- Reading position lost during orientation change
+
+**Implementation**:
+```typescript
+const handleOrientationChange = () => {
+  // Save current reading position
+  const currentCFI = view.getCurrentCFI();
+
+  // Prevent layout until transition complete
+  view.freeze();
+
+  // Update layout for new orientation
+  requestAnimationFrame(() => {
+    view.updateLayout();
+
+    // Restore reading position
+    view.goToCFI(currentCFI);
+
+    // Unfreeze after layout stable
+    setTimeout(() => view.unfreeze(), 100);
+  });
+};
+
+window.addEventListener('orientationchange', handleOrientationChange);
+```
+
+**CSS Transitions**:
+```css
+/* Smooth orientation transition */
+@media (prefers-reduced-motion: no-preference) {
+  .reader-view {
+    transition: width 0.3s ease-out, height 0.3s ease-out;
+  }
+}
+```
+
+**Files**:
+- `src/app/reader/components/FoliateViewer.tsx`
+- `src/hooks/useOrientation.ts`
+
+### Splash Screen and Icon Improvements (v0.9.60, #1450)
+
+**Enhancement**: Updated splash screen and app icon for better iOS integration.
+
+**Changes**:
+1. **Splash Screen**:
+   - Dismiss splash screen programmatically when app ready
+   - Smooth fade-out transition
+   - Proper background color matching app theme
+
+2. **Icon Background**:
+   - Changed from transparent to solid color
+   - Better visibility in task switcher
+   - Consistent with iOS design guidelines
+
+**Implementation** (`src-tauri/src/ios/splash.rs`):
+```rust
+use tauri_plugin_splash::SplashExt;
+
+#[tauri::command]
+fn dismiss_splash(app: AppHandle) {
+    // Dismiss after app initialization complete
+    app.splash().dismiss();
+}
+```
+
+**Frontend** (`src/App.tsx`):
+```typescript
+useEffect(() => {
+  const initialize = async () => {
+    // Load critical resources
+    await loadSettings();
+    await loadLibrary();
+
+    // Dismiss splash screen
+    if (isIOS) {
+      invoke('dismiss_splash');
+    }
+  };
+
+  initialize();
+}, []);
+```
+
+**Assets**:
+- `src-tauri/icons/AppIcon.iconset/` - Updated icon set
+- `src-tauri/assets/LaunchScreen.storyboard` - Splash screen
+
+**Files**:
+- `src-tauri/src/ios/splash.rs`
+- `src-tauri/icons/` - Icon assets
+
+### iPad Layout Tweaks (v0.9.59, #1446, #1447)
+
+**Enhancements**: Various layout optimizations specifically for iPad.
+
+**Changes**:
+1. **Ignore System Insets When No Header/Footer** (#1447):
+   - When header/footer hidden, use full screen space
+   - No unnecessary padding in immersive mode
+   - Better space utilization
+
+2. **Adaptive Font Sizes**:
+   - Larger fonts for iPad vs iPhone
+   - Scale based on screen size
+   - Respect accessibility settings
+
+3. **Touch Target Sizes**:
+   - Minimum 44×44pt touch targets
+   - Increased spacing for iPad
+   - Better one-handed operation
+
+**Implementation** (`src/styles/ipad-layout.css`):
+```css
+@media (min-width: 768px) {
+  /* iPad and larger */
+  .button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 24px;
+  }
+
+  .text-base {
+    font-size: 17px; /* vs 15px on iPhone */
+  }
+}
+
+@media (min-width: 1024px) {
+  /* iPad Pro and larger */
+  .sidebar {
+    width: 320px; /* vs 280px on smaller iPads */
+  }
+}
+```
+
+**Files**:
+- `src/styles/ipad-layout.css`
+- `src/components/Layout.tsx`
+
+---
+
 ## Related Documentation
 
 - **[Cross-Platform Support Index](./index.md)** - Overview of all platforms

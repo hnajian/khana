@@ -383,6 +383,206 @@ To show library statistics:
 - Verify file permissions (native app)
 - Add user-facing error messages
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Select All Button in Select Mode (v0.9.48, #1209)
+
+**Feature**: "Select All" button when in select mode for batch operations.
+
+**UI Location**: Top bar when select mode is active
+
+**Functionality**:
+- Selects all books in current view/filter
+- Visual feedback for selected state
+- Enables batch actions: delete, export, add to group
+
+**Implementation** (`src/app/library/components/LibraryHeader.tsx`):
+```typescript
+const handleSelectAll = () => {
+  const visibleBooks = getFilteredBooks();
+  setSelectedBooks(visibleBooks.map(b => b.hash));
+};
+
+return (
+  <div className="select-mode-header">
+    <button onClick={handleSelectAll}>
+      Select All ({filteredBooks.length})
+    </button>
+    <button onClick={handleDeselectAll}>Clear</button>
+  </div>
+);
+```
+
+**Select Filtered Books** (v0.9.48, #1237):
+- "Select All" respects current search/filter
+- Only selects visible books, not entire library
+- Clear indication of selection count
+
+**File**: `src/app/library/components/LibraryHeader.tsx`
+
+### Show Current Books Count (v0.9.52, #1312)
+
+**Feature**: Display total book count in library header/search bar.
+
+**UI**: "342 books" displayed in library header
+
+**Dynamic Updates**:
+- Updates when books imported/deleted
+- Shows filtered count when search active
+- Format: "X of Y books" when filtered
+
+**Implementation** (`src/app/library/components/LibraryHeader.tsx`):
+```typescript
+const BookCount = () => {
+  const { books, filteredBooks, isFiltering } = useLibraryStore();
+
+  return (
+    <div className="book-count">
+      {isFiltering ? (
+        <span>{filteredBooks.length} of {books.length} books</span>
+      ) : (
+        <span>{books.length} books</span>
+      )}
+    </div>
+  );
+};
+```
+
+**File**: `src/app/library/components/LibraryHeader.tsx`
+
+### Update Bookshelf After Import/Delete (v0.9.52-0.9.53, #1314, #1331, #1336)
+
+**Enhancement**: Automatic bookshelf refresh after library modifications.
+
+**Issues Fixed**:
+- Bookshelf didn't update after importing books (#1314, #1331)
+- Deleted books still appeared until page refresh
+- Book count not updated after operations
+
+**Solution** (`src/store/libraryStore.ts`):
+```typescript
+// Trigger library update event
+const importBooks = async (files: File[]) => {
+  const imported = await processImport(files);
+
+  // Update library state
+  set(state => ({
+    books: [...state.books, ...imported]
+  }));
+
+  // Trigger UI refresh event
+  emit('library-updated', { action: 'import', count: imported.length });
+};
+
+const deleteBooks = async (hashes: string[]) => {
+  await batchDelete(hashes);
+
+  // Update library state
+  set(state => ({
+    books: state.books.filter(b => !hashes.includes(b.hash))
+  }));
+
+  // Trigger UI refresh event
+  emit('library-updated', { action: 'delete', count: hashes.length });
+};
+```
+
+**Bookshelf Listener** (`src/app/library/components/Bookshelf.tsx`):
+```typescript
+useEffect(() => {
+  const handleLibraryUpdate = () => {
+    // Refresh current bookshelf view
+    refreshBookshelf();
+  };
+
+  on('library-updated', handleLibraryUpdate);
+  return () => off('library-updated', handleLibraryUpdate);
+}, []);
+```
+
+**Files**:
+- `src/store/libraryStore.ts`
+- `src/app/library/components/Bookshelf.tsx`
+
+### Delete Cloud Backup Only (v0.9.63, #1546)
+
+**Feature**: Option to delete only the cloud backup of a book while keeping local copy.
+
+**Use Case**: Free up cloud storage quota without deleting local book.
+
+**UI**: Book context menu > "Delete Cloud Backup"
+
+**Confirmation Dialog**:
+```
+Delete cloud backup for "Book Title"?
+
+The book will remain in your local library.
+Your reading progress and notes will be kept.
+
+[Cancel] [Delete Cloud Backup]
+```
+
+**Implementation** (`src/services/syncService.ts`):
+```typescript
+const deleteCloudBackup = async (bookHash: string) => {
+  // Delete from Supabase storage
+  await supabase.storage
+    .from('books')
+    .remove([`${userId}/${bookHash}.epub`]);
+
+  // Update sync status
+  await supabase
+    .from('book_sync_status')
+    .update({ cloud_backup: false })
+    .eq('book_hash', bookHash)
+    .eq('user_id', userId);
+
+  // Keep local book and data
+  // No changes to local library
+};
+```
+
+**Status Indicator**:
+- Icon shows: Cloud synced, Local only, or Cloud + Local
+- Tooltip explains sync status
+- Quick toggle in book details
+
+**Files**:
+- `src/services/syncService.ts`
+- `src/app/library/components/BookContextMenu.tsx`
+- `src/components/CloudSyncStatus.tsx`
+
+### Exit Select Mode When All Deleted (v0.9.53, #1350)
+
+**Enhancement**: Automatically exit select mode when all selected books are deleted.
+
+**Behavior**:
+1. User enters select mode
+2. Selects multiple books
+3. Deletes all selected books
+4. Select mode automatically exits
+5. Returns to normal library view
+
+**Implementation** (`src/app/library/components/Bookshelf.tsx`):
+```typescript
+const handleDelete = async (hashes: string[]) => {
+  await deleteBooks(hashes);
+
+  // Check if any books remain
+  const remainingBooks = books.filter(b => !hashes.includes(b.hash));
+
+  if (remainingBooks.length === 0 || selectedBooks.length === books.length) {
+    // Exit select mode if all books deleted
+    setSelectMode(false);
+    setSelectedBooks([]);
+  }
+};
+```
+
+**File**: `src/app/library/components/Bookshelf.tsx`
+
+---
+
 ## Dependencies
 
 - **Tauri Dialog API**: File picker for import
