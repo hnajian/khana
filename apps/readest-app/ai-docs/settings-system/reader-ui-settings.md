@@ -984,8 +984,410 @@ All features follow Readest's design philosophy of providing power users with ex
 
 ---
 
-**Last Updated**: Documentation for commit f4908c45 (February 2025)
+---
+
+## 7. Prev/Next Section Navigation
+
+**Added**: v0.9.43 (Commit 7c464b9a, #1195, #1125)
+
+### Overview
+
+The Prev/Next Section Navigation feature adds dedicated buttons in the footer bar for quick navigation between book sections/chapters. This complements existing page navigation by allowing users to jump directly to the previous or next section without using the table of contents.
+
+### UI Location
+
+**Position**: Footer bar (reader interface)
+**Buttons**:
+- Previous Section (⏮ icon)
+- Next Section (⏭ icon)
+
+### Implementation
+
+**File**: `src/app/reader/components/FooterBar.tsx`
+
+```typescript
+const FooterBar = () => {
+  const { sections, currentSectionIndex } = useBookNavigation();
+  const hasPrevSection = currentSectionIndex > 0;
+  const hasNextSection = currentSectionIndex < sections.length - 1;
+
+  const goToPrevSection = () => {
+    if (hasPrevSection) {
+      const prevSection = sections[currentSectionIndex - 1];
+      navigateToSection(prevSection.href);
+    }
+  };
+
+  const goToNextSection = () => {
+    if (hasNextSection) {
+      const nextSection = sections[currentSectionIndex + 1];
+      navigateToSection(nextSection.href);
+    }
+  };
+
+  return (
+    <div className="footer-bar">
+      <button
+        onClick={goToPrevSection}
+        disabled={!hasPrevSection}
+        aria-label="Previous section"
+      >
+        <FaStepBackward />
+      </button>
+
+      {/* Page info and progress */}
+
+      <button
+        onClick={goToNextSection}
+        disabled={!hasNextSection}
+        aria-label="Next section"
+      >
+        <FaStepForward />
+      </button>
+    </div>
+  );
+};
+```
+
+### Button Behavior
+
+**Previous Section Button**:
+- Navigates to the start of the previous chapter/section
+- Disabled when on first section
+- Gray/dimmed appearance when disabled
+
+**Next Section Button**:
+- Navigates to the start of the next chapter/section
+- Disabled when on last section
+- Gray/dimmed appearance when disabled
+
+### Section Detection
+
+**TOC-Based** (`src/app/reader/hooks/useBookNavigation.ts`):
+```typescript
+const getCurrentSectionIndex = (currentCfi: string): number => {
+  const toc = book.getTOC();
+
+  // Find current section based on CFI
+  for (let i = 0; i < toc.length; i++) {
+    const section = toc[i];
+    if (isCfiBefore(currentCfi, section.cfi)) {
+      return Math.max(0, i - 1);
+    }
+  }
+
+  return toc.length - 1;
+};
+```
+
+### Keyboard Shortcuts
+
+While not part of the initial implementation, suggested shortcuts:
+- `Alt + ←`: Previous section
+- `Alt + →`: Next section
+
+### Use Cases
+
+**Quick Chapter Navigation**:
+- Finish reading a chapter and immediately jump to next
+- Return to previous chapter for reference
+- Skip to specific parts without opening TOC
+
+**Linear Reading Flow**:
+- Continue reading without interruption
+- Natural progression through book structure
+- Maintain reading momentum
+
+### Visual Design
+
+**Button Styling**:
+```css
+.section-nav-button {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.section-nav-button:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
+}
+
+.section-nav-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+```
+
+---
+
+## 8. Separate Header/Footer Visibility for Reading Modes
+
+**Added**: v0.9.32 (Commit ccd467eb, #859)
+
+### Overview
+
+This feature allows independent control of header and footer visibility for paginated and scrolled modes, enabling users to have different UI configurations for each reading mode.
+
+### Settings Structure
+
+**Type Definition** (`src/types/book.ts`):
+```typescript
+export interface ViewSettings {
+  // Paginated mode widgets
+  showHeader: boolean;
+  showFooter: boolean;
+
+  // Scrolled mode widgets (separate controls)
+  showHeaderInScrolled: boolean;
+  showFooterInScrolled: boolean;
+
+  // OR use the existing approach:
+  showWidgetsInScrolledMode: boolean;  // Apply paginated settings to scrolled
+
+  // ... other settings
+}
+```
+
+### Default Behavior
+
+**Paginated Mode** (Default):
+- Header: Shown
+- Footer: Shown
+- Full UI with section title and progress
+
+**Scrolled Mode** (Default):
+- Header: Hidden (unless `showWidgetsInScrolledMode: true`)
+- Footer: Hidden (unless `showWidgetsInScrolledMode: true`)
+- Distraction-free scrolling experience
+
+### Settings Location
+
+**Path**: Settings Dialog → Layout Panel → Header & Footer section
+
+**UI Implementation**:
+```typescript
+<div className="header-footer-settings">
+  <h4>{_('Header & Footer Visibility')}</h4>
+
+  {/* Paginated Mode */}
+  <fieldset>
+    <legend>{_('Paginated Mode')}</legend>
+    <label>
+      <input
+        type="checkbox"
+        checked={viewSettings.showHeader}
+        onChange={(e) => updateSetting('showHeader', e.target.checked)}
+      />
+      {_('Show Header')}
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        checked={viewSettings.showFooter}
+        onChange={(e) => updateSetting('showFooter', e.target.checked)}
+      />
+      {_('Show Footer')}
+    </label>
+  </fieldset>
+
+  {/* Scrolled Mode */}
+  <fieldset>
+    <legend>{_('Scrolled Mode')}</legend>
+    <label>
+      <input
+        type="checkbox"
+        checked={viewSettings.showWidgetsInScrolledMode}
+        onChange={(e) => updateSetting('showWidgetsInScrolledMode', e.target.checked)}
+      />
+      {_('Show Header & Footer in Scrolled Mode')}
+    </label>
+  </fieldset>
+</div>
+```
+
+### Implementation Logic
+
+**Conditional Rendering** (`src/app/reader/components/ReaderContent.tsx`):
+```typescript
+const shouldShowHeader = () => {
+  if (viewSettings.scrolled) {
+    return viewSettings.showWidgetsInScrolledMode;
+  }
+  return viewSettings.showHeader;
+};
+
+const shouldShowFooter = () => {
+  if (viewSettings.scrolled) {
+    return viewSettings.showWidgetsInScrolledMode;
+  }
+  return viewSettings.showFooter;
+};
+
+return (
+  <div className="reader-content">
+    {shouldShowHeader() && <HeaderBar />}
+    <BookView />
+    {shouldShowFooter() && <FooterBar />}
+  </div>
+);
+```
+
+### Use Cases
+
+**Paginated Mode**:
+- Traditional book-like experience
+- Header shows chapter title
+- Footer shows page numbers and progress
+- Information-rich reading
+
+**Scrolled Mode**:
+- Distraction-free scrolling
+- Minimal UI for immersive reading
+- More like reading a web article
+- Maximum vertical space
+
+---
+
+## 9. Compact Margin When Header/Footer Dismissed
+
+**Added**: v0.9.39 (Commit 4c1af671, #1047, #734)
+
+### Overview
+
+When header and/or footer widgets are dismissed, the reading area automatically adjusts with compact margins and gap values to maximize content space. This ensures that hiding UI elements actually provides more reading space rather than leaving empty gaps.
+
+### Implementation
+
+**File**: `src/app/reader/components/FoliateViewer.tsx`
+
+**Margin Calculation**:
+```typescript
+const getEffectiveMargins = (viewSettings: ViewSettings) => {
+  const baseMargin = viewSettings.margin || 20;
+  const baseGap = viewSettings.gap || 10;
+
+  // Compact mode when widgets are hidden
+  const compactMargin = Math.max(4, Math.round(baseMargin * 0.3));
+  const compactGap = Math.max(2, Math.round(baseGap * 0.3));
+
+  return {
+    top: viewSettings.showHeader ? baseMargin : compactMargin,
+    bottom: viewSettings.showFooter ? baseMargin : compactMargin,
+    left: baseMargin,
+    right: baseMargin,
+    gap: (viewSettings.showHeader || viewSettings.showFooter) ? baseGap : compactGap
+  };
+};
+```
+
+### Visual Impact
+
+**With Header/Footer** (Normal Mode):
+```
+┌────────────────────────────────┐
+│ Header Bar (44px)              │
+├────────────────────────────────┤
+│ ↕ Top Margin (20px)            │
+│                                │
+│    Book Content                │
+│                                │
+│ ↕ Bottom Margin (20px)         │
+├────────────────────────────────┤
+│ Footer Bar (44px)              │
+└────────────────────────────────┘
+```
+
+**Without Header/Footer** (Compact Mode):
+```
+┌────────────────────────────────┐
+│ ↕ Top Margin (6px) - Compact   │
+│                                │
+│                                │
+│    Book Content (More Space)   │
+│                                │
+│                                │
+│ ↕ Bottom Margin (6px) - Compact│
+└────────────────────────────────┘
+```
+
+### Margin Reduction Formula
+
+**Compact Margin**: `max(4px, margin × 0.3)`
+
+**Examples**:
+- `margin: 20px` → compact: `6px`
+- `margin: 40px` → compact: `12px`
+- `margin: 10px` → compact: `4px` (minimum)
+
+**Compact Gap**: `max(2px, gap × 0.3)`
+
+**Examples**:
+- `gap: 10px` → compact: `4px`
+- `gap: 20px` → compact: `6px`
+- `gap: 5px` → compact: `2px` (minimum)
+
+### Application
+
+**CSS Variables**:
+```typescript
+useEffect(() => {
+  const margins = getEffectiveMargins(viewSettings);
+
+  bookView?.renderer.setStyles?.({
+    '--margin-top': `${margins.top}px`,
+    '--margin-bottom': `${margins.bottom}px`,
+    '--margin-left': `${margins.left}px`,
+    '--margin-right': `${margins.right}px`,
+    '--gap': `${margins.gap}px`
+  });
+}, [viewSettings.showHeader, viewSettings.showFooter, viewSettings.margin, viewSettings.gap]);
+```
+
+### Settings Interaction
+
+**Affected Settings**:
+- `showHeader`: Triggers compact top margin when false
+- `showFooter`: Triggers compact bottom margin when false
+- `margin`: Base value for compact calculation
+- `gap`: Base value for compact gap calculation
+
+**Independent Controls**:
+- Left/right margins remain at base value
+- Only top/bottom margins are compacted
+- Gap between columns is compacted when widgets hidden
+
+### Use Cases
+
+**Maximized Reading Space**:
+- Small screens (mobile devices)
+- Distraction-free reading
+- Users who want minimal UI
+
+**Precision Layout Control**:
+- Fine-tune exact content area
+- Optimize for specific screen sizes
+- Balance aesthetics and functionality
+
+---
+
+## Summary Table (v0.9.32-0.9.43)
+
+| Feature | Version | Issue # | User Benefit |
+|---------|---------|---------|--------------|
+| **Prev/Next Section Buttons** | v0.9.43 | #1195 | Quick chapter navigation without TOC |
+| **Separate Mode Visibility** | v0.9.32 | #859 | Different UI for paginated vs scrolled |
+| **Compact Margins** | v0.9.39 | #1047 | Maximized space when UI hidden |
+
+---
+
+**Last Updated**: Documentation for commit def157ca (November 2025)
 **Related Documents**:
 - [Settings System Index](./index.md)
 - [Custom CSS Editor](./custom-css-editor.md)
 - [Screen Wake Lock](./screen-wake-lock.md)
+- [Screen Orientation](./screen-orientation.md)
+- [Theme Editor](./theme-editor.md)
