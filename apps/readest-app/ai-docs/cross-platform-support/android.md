@@ -807,6 +807,63 @@ pub async fn get_android_voices() -> Result<Vec<Voice>> {
 
 ---
 
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Custom Data Location on External SD Card (v0.9.88, #2292)
+
+**Feature**: Support for custom data location on external SD card for better storage management.
+
+**Overview**: Users can now move Readest's data directory to an external SD card, useful for devices with limited internal storage.
+
+**Settings Location**: Settings > Storage > "Data Location"
+
+**Key Features**:
+- Move existing data to SD card
+- Automatic migration of books and settings
+- Persistent across app updates
+- Support for both internal and external storage
+
+**Implementation** (`src-tauri/src/android/storage.rs`):
+```rust
+#[tauri::command]
+pub async fn set_custom_data_location(path: String) -> Result<(), String> {
+    // Validate path is accessible
+    if !Path::new(&path).exists() {
+        return Err("Path does not exist".to_string());
+    }
+
+    // Check write permissions
+    let test_file = Path::new(&path).join(".write_test");
+    match std::fs::write(&test_file, "test") {
+        Ok(_) => {
+            std::fs::remove_file(&test_file).ok();
+        }
+        Err(e) => {
+            return Err(format!("Cannot write to path: {}", e));
+        }
+    }
+
+    // Update app configuration
+    set_app_data_dir(&path)?;
+
+    Ok(())
+}
+```
+
+**User Workflow**:
+1. Open Settings > Storage
+2. Tap "Change Data Location"
+3. Select external SD card directory
+4. Confirm migration
+5. App automatically moves all data
+6. Restart required to complete
+
+**Files**:
+- `src-tauri/src/android/storage.rs` - Storage management
+- `src/app/settings/components/StorageSettings.tsx` - UI controls
+
+---
+
 ## Related Documentation
 
 - **[Cross-Platform Support Index](./index.md)** - Overview of all platforms
@@ -815,5 +872,5 @@ pub async fn get_android_voices() -> Result<Vec<Voice>> {
 
 ---
 
-**Last Updated**: Documentation for commit f4908c45 (February 2025)
-**Related Commits**: #361, #653, #695, #720, #762, #763, #788, #798, #799, #807, #829, #833
+**Last Updated**: Documentation for commit dd5371d2 (November 2025, v0.9.90)
+**Related Commits**: #361, #653, #695, #720, #762, #763, #788, #798, #799, #807, #829, #833, #2292

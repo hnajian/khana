@@ -604,6 +604,257 @@ function formatRelativeTime(timestamp: number): string {
 
 ---
 
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Custom Highlight Color Picker (v0.9.88, #2273)
+
+**Major Feature**: Ability to customize highlight colors with hex color picker.
+
+**Overview**: Users can now set custom colors for all five highlight styles (red, violet, blue, green, yellow) using a hex color picker instead of being limited to predefined colors.
+
+**Settings Location**: Settings > Annotations > "Customize Highlight Colors"
+
+**Features**:
+- Hex color input for each highlight style
+- Color preview with live update
+- Reset to default colors button
+- Per-user customization (saved globally)
+- Responsive layout for color options (#2303)
+
+**Implementation** (`src/app/reader/components/settings/AnnotationSettings.tsx`):
+```typescript
+interface HighlightColorCustomization {
+  color1: string;  // Default: Yellow
+  color2: string;  // Default: Green
+  color3: string;  // Default: Blue
+  color4: string;  // Default: Pink
+  color5: string;  // Default: Purple
+}
+
+const DEFAULT_COLORS: HighlightColorCustomization = {
+  color1: '#FFF9C4',  // Yellow
+  color2: '#C8E6C9',  // Green
+  color3: '#BBDEFB',  // Blue
+  color4: '#F8BBD0',  // Pink
+  color5: '#E1BEE7'   // Purple
+};
+
+const CustomHighlightColorPicker = () => {
+  const [colors, setColors] = useState<HighlightColorCustomization>(
+    settingsStore.getState().highlightColors || DEFAULT_COLORS
+  );
+
+  const updateColor = (colorKey: keyof HighlightColorCustomization, value: string) => {
+    // Validate hex color
+    if (!/^#[0-9A-F]{6}$/i.test(value)) {
+      return; // Invalid hex color
+    }
+
+    const newColors = { ...colors, [colorKey]: value };
+    setColors(newColors);
+
+    // Save to settings
+    settingsStore.setHighlightColors(newColors);
+
+    // Apply to existing highlights in current book
+    applyColorChangesToHighlights(colorKey, value);
+  };
+
+  const resetToDefaults = () => {
+    setColors(DEFAULT_COLORS);
+    settingsStore.setHighlightColors(DEFAULT_COLORS);
+
+    // Reapply default colors to all highlights
+    Object.keys(DEFAULT_COLORS).forEach((key, index) => {
+      applyColorChangesToHighlights(key as keyof HighlightColorCustomization, DEFAULT_COLORS[key]);
+    });
+  };
+
+  return (
+    <div className="custom-highlight-colors">
+      <h3>{t('Customize Highlight Colors')}</h3>
+
+      <div className="color-pickers-grid">
+        {Object.entries(colors).map(([key, value], index) => (
+          <div key={key} className="color-picker-item">
+            <label className="label">
+              <span className="label-text">{t(`Color ${index + 1}`)}</span>
+            </label>
+
+            <div className="color-input-group">
+              <input
+                type="color"
+                value={value}
+                onChange={(e) => updateColor(key as keyof HighlightColorCustomization, e.target.value)}
+                className="color-picker"
+              />
+
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => updateColor(key as keyof HighlightColorCustomization, e.target.value)}
+                placeholder="#FFFFFF"
+                pattern="^#[0-9A-Fa-f]{6}$"
+                className="input input-bordered hex-input"
+              />
+
+              <div
+                className="color-preview"
+                style={{ backgroundColor: value }}
+                title={`Preview: ${value}`}
+              >
+                <span className="preview-text">Sample</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="actions">
+        <button onClick={resetToDefaults} className="btn btn-outline">
+          {t('Reset to Defaults')}
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+**Responsive Layout** (#2303):
+```css
+.color-pickers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .color-pickers-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .color-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .color-preview {
+    width: 100%;
+    height: 50px;
+  }
+}
+```
+
+**Applying Custom Colors to Highlights**:
+```typescript
+const applyColorChangesToHighlights = (
+  colorKey: keyof HighlightColorCustomization,
+  newColor: string
+) => {
+  // Get color index (color1 -> 0, color2 -> 1, etc.)
+  const colorIndex = parseInt(colorKey.replace('color', '')) - 1;
+
+  // Update all highlights using this color
+  const currentBook = readerStore.getState().currentBook;
+  if (!currentBook) return;
+
+  const annotations = notebookStore.getState().booknotes[currentBook.hash]?.highlights || [];
+
+  annotations
+    .filter(a => a.colorIndex === colorIndex)
+    .forEach(annotation => {
+      // Update annotation color
+      annotation.color = newColor;
+
+      // Redraw annotation overlay in all views
+      const views = readerStore.getViewsById(currentBook.hash);
+      views.forEach(view => {
+        view.updateAnnotation(annotation.id, { color: newColor });
+      });
+    });
+
+  // Save updated annotations
+  notebookStore.saveAnnotations(currentBook.hash);
+};
+```
+
+**Color Storage**:
+```typescript
+interface SystemSettings {
+  // ...existing settings
+  highlightColors?: HighlightColorCustomization;
+}
+
+// In settingsStore.ts
+const useSettingsStore = create<SettingsStore>((set, get) => ({
+  // ...
+  setHighlightColors: (colors: HighlightColorCustomization) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        highlightColors: colors
+      }
+    }));
+
+    // Persist to disk
+    appService.saveSettings(get().settings);
+  }
+}));
+```
+
+**Benefits**:
+- Personal color preferences for highlighting
+- Better accessibility (choose high-contrast colors)
+- Color-coding for different types of notes
+- Thematic color schemes (e.g., warm vs cool colors)
+- Support for colorblind users
+
+**Use Cases**:
+- Color-code by importance (red = critical, yellow = review)
+- Match highlight colors to book themes
+- Use high-contrast colors for better visibility
+- Accessibility: Choose colors that work with vision impairments
+
+**Files**:
+- `src/app/reader/components/settings/AnnotationSettings.tsx` - Color picker UI
+- `src/store/settingsStore.ts` - Color storage
+- `src/app/reader/components/annotator/HighlightOptions.tsx` - Apply custom colors
+- `src/types/settings.ts` - Type definitions
+
+### Load Annotations of Current Section on Open (#2174)
+
+**Enhancement**: Annotations for the current section are now drawn immediately when opening a book.
+
+**Behavior**:
+- Previously: Annotations loaded after navigation or page turn
+- Now: Annotations visible as soon as book opens to last reading position
+
+**Implementation**:
+```typescript
+// In FoliateViewer.tsx
+useEffect(() => {
+  if (view && bookHash) {
+    // Get current section/chapter CFI
+    const currentCFI = view.getCurrentLocation();
+
+    // Load annotations for this section
+    const sectionAnnotations = notebookStore
+      .getAnnotationsBySection(bookHash, currentCFI);
+
+    // Draw annotations
+    sectionAnnotations.forEach(annotation => {
+      view.addAnnotation(annotation);
+    });
+  }
+}, [view, bookHash]);
+```
+
+**Files**:
+- `src/app/reader/components/FoliateViewer.tsx` - Annotation loading on mount
+
+---
+
 ## Dependencies
 
 - **foliate-js**: Provides selection and annotation overlay APIs

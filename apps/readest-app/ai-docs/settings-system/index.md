@@ -1470,5 +1470,415 @@ const FontSettings = () => {
 
 ---
 
-**Last Updated**: Documentation for commits through e1691661 (November 2025, v0.9.82)
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Screen Brightness Control (v0.9.83-0.9.85, #2197, #2297, #2338)
+
+**Feature**: Manual and automatic screen brightness adjustment during reading.
+
+**Overview**: Users can now adjust screen brightness directly from the reader interface, with options for manual control and automatic brightness based on ambient light.
+
+**Settings Location**: Settings > Display Panel > "Screen Brightness"
+
+**Brightness Modes**:
+
+1. **Manual Brightness** (#2197):
+   - Slider control for precise brightness adjustment
+   - Range: 0% to 100%
+   - Per-book brightness settings
+   - Persistent across sessions
+
+2. **Auto Brightness** (#2297):
+   - Automatic adjustment based on ambient light sensors
+   - Platform-specific implementation
+   - Toggle on/off option
+   - Manual override available
+
+3. **Non-Linear Brightness Slider** (#2338):
+   - Logarithmic scale for better low-value control
+   - More precise control at lower brightness levels
+   - Improved usability in dark environments
+
+**Implementation** (`src/app/reader/components/settings/DisplayPanel.tsx`):
+```typescript
+const BrightnessControl = () => {
+  const [brightness, setBrightness] = useState(100);
+  const [autoBrightness, setAutoBrightness] = useState(false);
+
+  // Non-linear mapping for better low-value control
+  const mapBrightnessValue = (sliderValue: number): number => {
+    // Logarithmic scale: more precision at lower values
+    // 0-100 slider maps to 0-100% brightness non-linearly
+    const normalized = sliderValue / 100;
+    const mapped = Math.pow(normalized, 2); // Quadratic mapping
+    return Math.round(mapped * 100);
+  };
+
+  const applyBrightness = async (value: number) => {
+    const actualBrightness = mapBrightnessValue(value);
+
+    // Apply to screen
+    if (isNativePlatform()) {
+      await invoke('set_screen_brightness', { brightness: actualBrightness / 100 });
+    } else {
+      // Web platform: adjust via CSS filter
+      document.body.style.filter = `brightness(${actualBrightness}%)`;
+    }
+  };
+
+  return (
+    <div className="brightness-control">
+      <div className="form-control">
+        <label className="label">
+          <span className="label-text">{t('Screen Brightness')}</span>
+          <span className="label-text-alt">{mapBrightnessValue(brightness)}%</span>
+        </label>
+
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={brightness}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            setBrightness(value);
+            applyBrightness(value);
+          }}
+          className="range range-primary"
+          disabled={autoBrightness}
+        />
+      </div>
+
+      <div className="form-control">
+        <label className="label cursor-pointer">
+          <span className="label-text">{t('Auto Brightness')}</span>
+          <input
+            type="checkbox"
+            className="toggle"
+            checked={autoBrightness}
+            onChange={(e) => {
+              setAutoBrightness(e.target.checked);
+              if (e.target.checked) {
+                enableAutoBrightness();
+              } else {
+                disableAutoBrightness();
+              }
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+};
+```
+
+**Platform-Specific Implementation**:
+
+**iOS/Android** (`src-tauri/src/brightness.rs`):
+```rust
+#[tauri::command]
+pub async fn set_screen_brightness(brightness: f32) -> Result<(), String> {
+    #[cfg(target_os = "ios")]
+    {
+        use objc::runtime::{Class, Object};
+        use objc::{msg_send, sel, sel_impl};
+
+        unsafe {
+            let screen: *mut Object = msg_send![Class::get("UIScreen").unwrap(), mainScreen];
+            let _: () = msg_send![screen, setBrightness: brightness];
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // Android implementation using Android APIs
+        let activity = get_android_activity();
+        activity.set_screen_brightness(brightness);
+    }
+
+    Ok(())
+}
+```
+
+**Desktop** (Linux/Windows/macOS):
+- Platform-specific APIs for display brightness
+- Fallback to CSS filter on web platform
+- System brightness API integration
+
+**Use Cases**:
+- Reading in dark environments
+- Reducing eye strain
+- Battery conservation
+- Accessibility requirements
+- E-ink display optimization
+
+**Files**:
+- `src/app/reader/components/settings/DisplayPanel.tsx` - UI controls
+- `src-tauri/src/brightness.rs` - Native brightness control
+- `src/services/brightnessService.ts` - Service abstraction
+- `src/types/settings.ts` - Settings type definitions
+
+### Custom Background Images (v0.9.85-0.9.86, #2214, #2225)
+
+**Feature**: Support for custom background images while reading.
+
+**Overview**: Users can set custom background images globally or per-book, with options for opacity, blending, and positioning.
+
+**Settings Location**: Settings > Appearance > "Background Image"
+
+**Background Image Options**:
+
+1. **Global Background Image** (#2214):
+   - Set default background for all books
+   - Image file selection from local storage
+   - Opacity control (0-100%)
+   - Blending modes (normal, multiply, screen)
+   - Position and sizing options
+
+2. **Per-Book Background Images** (#2225):
+   - Override global background for specific books
+   - Book-specific opacity and blending settings
+   - Independent from global settings
+
+**Implementation** (`src/app/reader/components/settings/AppearancePanel.tsx`):
+```typescript
+interface BackgroundImageSettings {
+  enabled: boolean;
+  imagePath: string;
+  opacity: number;         // 0-100
+  blendMode: 'normal' | 'multiply' | 'screen' | 'overlay';
+  position: 'center' | 'tile' | 'stretch' | 'fit';
+  fixed: boolean;          // Fixed while scrolling
+}
+
+const BackgroundImageSelector = () => {
+  const [bgSettings, setBgSettings] = useState<BackgroundImageSettings>({
+    enabled: false,
+    imagePath: '',
+    opacity: 20,
+    blendMode: 'multiply',
+    position: 'center',
+    fixed: true
+  });
+
+  const selectBackgroundImage = async () => {
+    const selected = await appService.selectFiles({
+      filters: [{
+        name: 'Images',
+        extensions: ['jpg', 'jpeg', 'png', 'webp', 'svg']
+      }],
+      multiple: false
+    });
+
+    if (selected && selected.length > 0) {
+      const imagePath = selected[0];
+
+      // Copy to app data directory
+      const savedPath = await appService.saveBackgroundImage(imagePath);
+
+      setBgSettings({
+        ...bgSettings,
+        imagePath: savedPath,
+        enabled: true
+      });
+    }
+  };
+
+  const applyBackgroundImage = () => {
+    if (!bgSettings.enabled || !bgSettings.imagePath) {
+      document.body.style.backgroundImage = 'none';
+      return;
+    }
+
+    const { imagePath, opacity, blendMode, position, fixed } = bgSettings;
+
+    // Apply CSS
+    document.body.style.backgroundImage = `url("${imagePath}")`;
+    document.body.style.backgroundSize = getSizeFromPosition(position);
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundRepeat = position === 'tile' ? 'repeat' : 'no-repeat';
+    document.body.style.backgroundAttachment = fixed ? 'fixed' : 'scroll';
+
+    // Opacity via pseudo-element
+    document.documentElement.style.setProperty('--bg-image-opacity', `${opacity / 100}`);
+    document.documentElement.style.setProperty('--bg-blend-mode', blendMode);
+  };
+
+  const getSizeFromPosition = (pos: string): string => {
+    switch (pos) {
+      case 'stretch': return '100% 100%';
+      case 'fit': return 'contain';
+      case 'tile': return 'auto';
+      default: return 'cover';
+    }
+  };
+
+  return (
+    <div className="background-image-settings">
+      <div className="form-control">
+        <label className="label cursor-pointer">
+          <span className="label-text">{t('Enable Background Image')}</span>
+          <input
+            type="checkbox"
+            className="toggle"
+            checked={bgSettings.enabled}
+            onChange={(e) => {
+              setBgSettings({ ...bgSettings, enabled: e.target.checked });
+              applyBackgroundImage();
+            }}
+          />
+        </label>
+      </div>
+
+      {bgSettings.enabled && (
+        <>
+          <button onClick={selectBackgroundImage} className="btn btn-primary">
+            {bgSettings.imagePath ? t('Change Image') : t('Select Image')}
+          </button>
+
+          {bgSettings.imagePath && (
+            <>
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">{t('Opacity')}</span>
+                  <span className="label-text-alt">{bgSettings.opacity}%</span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={bgSettings.opacity}
+                  onChange={(e) => {
+                    setBgSettings({ ...bgSettings, opacity: Number(e.target.value) });
+                    applyBackgroundImage();
+                  }}
+                  className="range"
+                />
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">{t('Blend Mode')}</span>
+                </label>
+                <select
+                  value={bgSettings.blendMode}
+                  onChange={(e) => {
+                    setBgSettings({ ...bgSettings, blendMode: e.target.value as any });
+                    applyBackgroundImage();
+                  }}
+                  className="select select-bordered"
+                >
+                  <option value="normal">{t('Normal')}</option>
+                  <option value="multiply">{t('Multiply')}</option>
+                  <option value="screen">{t('Screen')}</option>
+                  <option value="overlay">{t('Overlay')}</option>
+                </select>
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">{t('Position')}</span>
+                </label>
+                <select
+                  value={bgSettings.position}
+                  onChange={(e) => {
+                    setBgSettings({ ...bgSettings, position: e.target.value as any });
+                    applyBackgroundImage();
+                  }}
+                  className="select select-bordered"
+                >
+                  <option value="center">{t('Center (Cover)')}</option>
+                  <option value="fit">{t('Fit')}</option>
+                  <option value="stretch">{t('Stretch')}</option>
+                  <option value="tile">{t('Tile')}</option>
+                </select>
+              </div>
+
+              <div className="form-control">
+                <label className="label cursor-pointer">
+                  <span className="label-text">{t('Fixed While Scrolling')}</span>
+                  <input
+                    type="checkbox"
+                    className="toggle"
+                    checked={bgSettings.fixed}
+                    onChange={(e) => {
+                      setBgSettings({ ...bgSettings, fixed: e.target.checked });
+                      applyBackgroundImage();
+                    }}
+                  />
+                </label>
+              </div>
+
+              <button
+                onClick={() => {
+                  setBgSettings({ ...bgSettings, imagePath: '', enabled: false });
+                  applyBackgroundImage();
+                }}
+                className="btn btn-error btn-outline"
+              >
+                {t('Remove Background Image')}
+              </button>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+```
+
+**CSS Implementation** (`src/styles/background-image.css`):
+```css
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: inherit;
+  background-size: inherit;
+  background-position: inherit;
+  background-repeat: inherit;
+  opacity: var(--bg-image-opacity, 0.2);
+  mix-blend-mode: var(--bg-blend-mode, multiply);
+  pointer-events: none;
+  z-index: -1;
+}
+```
+
+**Per-Book Settings** (BookConfig):
+```typescript
+interface BookConfig {
+  // ...existing fields
+  backgroundImage?: BackgroundImageSettings;
+}
+
+// Override global background with book-specific settings
+const getEffectiveBackgroundSettings = (
+  globalSettings: BackgroundImageSettings,
+  bookSettings?: BackgroundImageSettings
+): BackgroundImageSettings => {
+  if (bookSettings && bookSettings.enabled) {
+    return bookSettings;
+  }
+  return globalSettings;
+};
+```
+
+**Use Cases**:
+- Aesthetic customization
+- Thematic reading experience (e.g., parchment texture for classics)
+- Reduced eye strain with textured backgrounds
+- Personal preference for visual ambiance
+
+**Files**:
+- `src/app/reader/components/settings/AppearancePanel.tsx` - UI controls
+- `src/services/appService.ts` - Image file management
+- `src/types/settings.ts` - Settings type definitions
+- `src/styles/background-image.css` - Background styling
+
+---
+
+**Last Updated**: Documentation for commits through dd5371d2 (November 2025, v0.9.90)
 **Related Documents**: [reader-ui-settings](./reader-ui-settings.md), [custom-css-editor](./custom-css-editor.md), [cross-platform-support](../cross-platform-support/index.md)

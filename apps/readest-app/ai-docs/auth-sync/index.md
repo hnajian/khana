@@ -1762,5 +1762,220 @@ const ensureValidToken = async (): Promise<string> => {
 
 ---
 
-**Last Updated:** Documentation for commits up to def157ca (November 2025)
-**Related Documents:** [feature-cross-platform-support.md](./feature-cross-platform-support.md), [feature-library-management.md](./feature-library-management.md)
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Cloud Storage Expansion (v0.9.89, #2325, #2331)
+
+**Major Feature**: Expand cloud storage with one-time payment or In-App Purchase (IAP).
+
+**Overview**: Users can now purchase additional cloud storage for syncing more books and annotations.
+
+**Storage Tiers**:
+- **Free**: 100 MB cloud storage
+- **Expanded**: 1 GB cloud storage (one-time payment)
+- **Premium**: 10 GB cloud storage (subscription or IAP)
+
+**Purchase Methods**:
+1. **Web/Desktop** (#2325): One-time payment via Stripe
+2. **iOS** (#2331): In-App Purchase through App Store
+3. **Android** (#2331): In-App Purchase through Google Play
+
+**Implementation** (`src/app/settings/components/StorageUpgrade.tsx`):
+```typescript
+interface StorageTier {
+  name: string;
+  storage: number;  // in MB
+  price: number;    // in USD
+  iap_product_id?: string;  // For mobile IAP
+}
+
+const STORAGE_TIERS: StorageTier[] = [
+  {
+    name: 'Free',
+    storage: 100,
+    price: 0
+  },
+  {
+    name: 'Expanded',
+    storage: 1024,  // 1 GB
+    price: 4.99,
+    iap_product_id: 'com.readest.storage.1gb'
+  },
+  {
+    name: 'Premium',
+    storage: 10240,  // 10 GB
+    price: 9.99,
+    iap_product_id: 'com.readest.storage.10gb'
+  }
+];
+
+const StorageUpgradeButton = ({ tier }: { tier: StorageTier }) => {
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  const handlePurchase = async () => {
+    setIsPurchasing(true);
+
+    try {
+      if (isNativePlatform()) {
+        // Use In-App Purchase
+        await purchaseViaIAP(tier.iap_product_id);
+      } else {
+        // Use web payment (Stripe)
+        await purchaseViaStripe(tier.name, tier.price);
+      }
+
+      toast.success('Storage upgraded successfully!');
+      await refreshStorageQuota();
+    } catch (error) {
+      toast.error(`Purchase failed: ${error.message}`);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  return (
+    <div className="storage-tier-card">
+      <h3>{tier.name}</h3>
+      <p>{tier.storage} MB cloud storage</p>
+      <p className="price">${tier.price}</p>
+
+      <button
+        onClick={handlePurchase}
+        disabled={isPurchasing}
+        className="btn btn-primary"
+      >
+        {isPurchasing ? 'Processing...' : 'Upgrade'}
+      </button>
+    </div>
+  );
+};
+```
+
+**IAP Implementation** (iOS/Android):
+```typescript
+// src/services/iapService.ts
+class IAPService {
+  async purchaseViaIAP(productId: string): Promise<void> {
+    // Request purchase through native platform
+    const result = await invoke('iap_purchase', { product_id: productId });
+
+    if (result.success) {
+      // Verify purchase with backend
+      await this.verifyPurchase(result.receipt);
+
+      // Update user's storage quota
+      await this.updateStorageQuota(productId);
+    } else {
+      throw new Error(result.error || 'Purchase failed');
+    }
+  }
+
+  async verifyPurchase(receipt: string): Promise<void> {
+    // Send receipt to backend for verification
+    const response = await fetch('/api/iap/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receipt })
+    });
+
+    if (!response.ok) {
+      throw new Error('Receipt verification failed');
+    }
+  }
+
+  async updateStorageQuota(productId: string): Promise<void> {
+    // Update user quota in database
+    await supabase.from('user_storage').update({
+      quota_mb: this.getStorageForProduct(productId),
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  private getStorageForProduct(productId: string): number {
+    const tier = STORAGE_TIERS.find(t => t.iap_product_id === productId);
+    return tier?.storage || 100;
+  }
+}
+```
+
+**Backend Verification** (Rust - Tauri):
+```rust
+// src-tauri/src/iap/verify.rs
+#[tauri::command]
+pub async fn iap_purchase(product_id: String) -> Result<PurchaseResult, String> {
+    #[cfg(target_os = "ios")]
+    {
+        use storekit::*;
+
+        let payment = SKPayment::with_product_identifier(&product_id);
+        let queue = SKPaymentQueue::default_queue();
+
+        queue.add_payment(payment).await
+            .map(|transaction| PurchaseResult {
+                success: true,
+                receipt: transaction.transactionReceipt,
+                error: None
+            })
+            .map_err(|e| format!("iOS IAP failed: {}", e))
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // Android IAP implementation
+        android_purchase_product(product_id).await
+    }
+
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        Err("IAP only available on mobile platforms".to_string())
+    }
+}
+```
+
+**Usage Monitoring**:
+```typescript
+// Show current storage usage
+const StorageUsageDisplay = () => {
+  const { used, quota } = useStorageQuota();
+  const percentUsed = (used / quota) * 100;
+
+  return (
+    <div className="storage-usage">
+      <div className="progress-bar">
+        <div
+          className="progress-fill"
+          style={{ width: `${percentUsed}%` }}
+        />
+      </div>
+
+      <p>
+        {formatBytes(used)} / {formatBytes(quota)} used ({percentUsed.toFixed(1)}%)
+      </p>
+
+      {percentUsed > 80 && (
+        <button onClick={() => navigateToUpgrade()}>
+          Upgrade Storage
+        </button>
+      )}
+    </div>
+  );
+};
+```
+
+**Benefits**:
+- Sync more books across devices
+- Store larger book collections
+- Preserve all annotations and notes
+- Lifetime access (one-time purchase)
+- Flexible payment options (web, iOS, Android)
+
+**Files**:
+- `src/app/settings/components/StorageUpgrade.tsx` - Upgrade UI
+- `src/services/iapService.ts` - IAP service abstraction
+- `src-tauri/src/iap/verify.rs` - Native IAP verification
+- `apps/readest-api/iap/verify.ts` - Backend receipt verification
+
+---
+
+**Last Updated:** Documentation for commits up to dd5371d2 (November 2025, v0.9.90)
+**Related Documents:** [cross-platform-support](../cross-platform-support/index.md), [library-management](../library-management/index.md)

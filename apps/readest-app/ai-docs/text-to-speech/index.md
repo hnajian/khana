@@ -1280,5 +1280,434 @@ class TTSController {
 
 ---
 
-**Last Updated**: Documentation for commits through e1691661 (November 2025, v0.9.82)
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Accurate Scrolling to Highlighted Text (v0.9.87, #2242)
+
+**Enhancement**: More accurate scrolling to highlighted text in TTS when header/footer bars are shown.
+
+**Problem**: Previously, TTS scroll position didn't account for header/footer bar heights, causing the highlighted text to be partially obscured.
+
+**Solution**: Calculate visible viewport height and adjust scroll position accordingly.
+
+**Implementation** (`src/app/reader/utils/tts/TTSController.ts`):
+```typescript
+class TTSController {
+  private scrollToHighlightedText(element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+
+    // Get header and footer heights
+    const header = document.querySelector('.reader-header');
+    const footer = document.querySelector('.reader-footer');
+    const headerHeight = header?.getBoundingClientRect().height || 0;
+    const footerHeight = footer?.getBoundingClientRect().height || 0;
+
+    // Calculate visible area
+    const visibleTop = headerHeight;
+    const visibleBottom = window.innerHeight - footerHeight;
+    const visibleHeight = visibleBottom - visibleTop;
+
+    // Check if element is fully visible
+    const isFullyVisible =
+      rect.top >= visibleTop &&
+      rect.bottom <= visibleBottom;
+
+    if (!isFullyVisible) {
+      // Center the highlighted text in visible area
+      const scrollTarget = rect.top + window.scrollY - visibleTop - (visibleHeight / 2) + (rect.height / 2);
+
+      window.scrollTo({
+        top: scrollTarget,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  private highlightCurrentSentence(sentence: string) {
+    const highlightElement = this.findSentenceElement(sentence);
+
+    if (highlightElement) {
+      // Apply highlight styling
+      highlightElement.classList.add('tts-highlight');
+
+      // Scroll into view with header/footer offset
+      this.scrollToHighlightedText(highlightElement);
+    }
+  }
+}
+```
+
+**CSS for TTS Highlight**:
+```css
+.tts-highlight {
+  background-color: rgba(255, 235, 59, 0.3);
+  border-radius: 4px;
+  padding: 2px 0;
+  transition: background-color 0.2s ease;
+}
+```
+
+**Benefits**:
+- TTS highlighted text always visible
+- No manual scrolling needed
+- Better reading flow
+- Accessibility improvement
+
+**Files**:
+- `src/app/reader/utils/tts/TTSController.ts` - Scroll calculation
+- `src/styles/tts.css` - Highlight styling
+
+### Fixed TTS Crashes on Android (v0.9.87, #2244)
+
+**Fix**: Resolved crash issues with TTS on some Android system versions.
+
+**Problem**: TTS was crashing on certain Android versions (especially older or custom ROMs) due to audio context handling issues.
+
+**Root Cause**:
+- Race condition in audio session initialization
+- Improper cleanup of audio resources
+- Android WebView audio policy conflicts
+
+**Solution**:
+```typescript
+class AndroidTTSBackend {
+  private audioContext: AudioContext | null = null;
+  private isInitialized = false;
+
+  async initialize() {
+    if (this.isInitialized) return;
+
+    try {
+      // Request audio focus before initializing
+      if (window.AndroidInterface) {
+        await window.AndroidInterface.requestAudioFocus();
+      }
+
+      // Create audio context with Android-specific settings
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+        latencyHint: 'playback',
+        sampleRate: 44100  // Standard sample rate for Android
+      });
+
+      // Resume audio context (required on some Android versions)
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('Failed to initialize TTS on Android:', error);
+
+      // Fallback to native Android TTS if available
+      if (window.AndroidInterface?.ttsSpeak) {
+        this.useFallbackTTS = true;
+      } else {
+        throw new Error('TTS not supported on this device');
+      }
+    }
+  }
+
+  async cleanup() {
+    if (this.audioContext) {
+      // Properly close audio context
+      await this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    // Release audio focus
+    if (window.AndroidInterface) {
+      window.AndroidInterface.abandonAudioFocus();
+    }
+
+    this.isInitialized = false;
+  }
+}
+```
+
+**Additional Fixes**:
+- Proper error handling for audio session failures
+- Graceful degradation to native Android TTS
+- Better lifecycle management (pause/resume/destroy)
+- Memory leak prevention in long reading sessions
+
+**Files**:
+- `src/app/reader/utils/tts/AndroidTTSBackend.ts` - Android-specific TTS
+- `src-tauri/src/android/tts.kt` - Native Android TTS wrapper
+
+### Improved TTS Indicator Visibility (v0.9.87, #2248)
+
+**Enhancement**: TTS indicator no longer disappears too quickly when trying to open configuration panel.
+
+**Problem**: TTS indicator had a short auto-hide timeout, making it difficult to click and open settings.
+
+**Solution**:
+- Extended hover grace period
+- Disable auto-hide when mouse is over indicator
+- Keep indicator visible when settings panel is open
+
+**Implementation**:
+```typescript
+const TTSIndicator = () => {
+  const [isVisible, setIsVisible] = useState(true);
+  const [isHovering, setIsHovering] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const hideTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const startHideTimer = () => {
+    // Clear any existing timer
+    if (hideTimeout.current) {
+      clearTimeout(hideTimeout.current);
+    }
+
+    // Don't hide if hovering or settings open
+    if (isHovering || showSettings) {
+      return;
+    }
+
+    // Extended timeout: 5 seconds instead of 2
+    hideTimeout.current = setTimeout(() => {
+      setIsVisible(false);
+    }, 5000);
+  };
+
+  const handleMouseEnter = () => {
+    setIsHovering(true);
+    // Cancel hide timer
+    if (hideTimeout.current) {
+      clearTimeout(hideTimeout.current);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovering(false);
+    // Restart hide timer when mouse leaves
+    if (!showSettings) {
+      startHideTimer();
+    }
+  };
+
+  return (
+    <div
+      className={`tts-indicator ${isVisible ? 'visible' : 'hidden'}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <button onClick={() => setShowSettings(!showSettings)}>
+        <SpeakerIcon />
+      </button>
+
+      {showSettings && (
+        <TTSSettingsPanel onClose={() => setShowSettings(false)} />
+      )}
+    </div>
+  );
+};
+```
+
+**User Experience Improvements**:
+- 5-second visibility instead of 2 seconds
+- Persistent when mouse hovering
+- Always visible when settings panel open
+- Smooth fade transitions
+
+**Files**:
+- `src/app/reader/components/tts/TTSIndicator.tsx` - Indicator component
+- `src/styles/tts-indicator.css` - Indicator styling
+
+### Default English Voice Change (v0.9.88, #2272)
+
+**Change**: Avoid using AnaNeural as default English voice due to quality issues.
+
+**Reasoning**:
+- AnaNeural voice has unnatural pronunciation
+- Users reported poor listening experience
+- Better alternatives available
+
+**New Default Voice Priority** (for English):
+1. **JennyNeural** (US English, female) - Primary
+2. **GuyNeural** (US English, male) - Secondary
+3. **AriaNeural** (US English, female) - Tertiary
+4. AnaNeural - Last resort
+
+**Implementation**:
+```typescript
+const getDefaultEnglishVoice = (availableVoices: Voice[]): Voice | null => {
+  const preferredVoices = [
+    'en-US-JennyNeural',
+    'en-US-GuyNeural',
+    'en-US-AriaNeural',
+    'en-GB-SoniaNeural',
+    'en-GB-RyanNeural',
+    'en-AU-NatashaNeural'
+    // AnaNeural excluded from preferred list
+  ];
+
+  // Try to find a preferred voice
+  for (const preferredName of preferredVoices) {
+    const voice = availableVoices.find(v => v.name === preferredName);
+    if (voice) return voice;
+  }
+
+  // Fallback to any English voice (including AnaNeural if nothing else available)
+  return availableVoices.find(v => v.lang.startsWith('en')) || null;
+};
+```
+
+**Files**:
+- `src/app/reader/utils/tts/voiceSelection.ts` - Voice priority logic
+
+### Target Language Selection for TTS on Translated Books (v0.9.89, #2310)
+
+**Major Feature**: Select target language for TTS when reading translated books.
+
+**Overview**: When reading a book with inline translation enabled, users can now choose whether TTS should read:
+- Original language text
+- Translated text
+- Both (alternating or side-by-side)
+
+**Use Cases**:
+- Language learning: Hear both original and translation
+- Accessibility: Listen in preferred language
+- Comparison: Understand pronunciation differences
+
+**Settings Location**: TTS Panel > "Translation Reading Mode"
+
+**Implementation** (`src/app/reader/components/tts/TTSSettings.tsx`):
+```typescript
+interface TTSTranslationSettings {
+  mode: 'original' | 'translation' | 'both';
+  bothMode: 'alternate' | 'simultaneous';  // Only when mode='both'
+  originalVoice?: Voice;
+  translationVoice?: Voice;
+}
+
+const TTSTranslationModeSelector = () => {
+  const [settings, setSettings] = useState<TTSTranslationSettings>({
+    mode: 'translation',  // Default: read translation
+    bothMode: 'alternate'
+  });
+
+  const isTranslated = translationStore.getState().isEnabled;
+
+  if (!isTranslated) {
+    return null;  // Only show when translation is active
+  }
+
+  return (
+    <div className="tts-translation-mode">
+      <label className="label">
+        <span className="label-text">{t('TTS Reading Mode')}</span>
+      </label>
+
+      <select
+        value={settings.mode}
+        onChange={(e) => setSettings({ ...settings, mode: e.target.value as any })}
+        className="select select-bordered"
+      >
+        <option value="original">{t('Read Original Text')}</option>
+        <option value="translation">{t('Read Translation')}</option>
+        <option value="both">{t('Read Both')}</option>
+      </select>
+
+      {settings.mode === 'both' && (
+        <>
+          <select
+            value={settings.bothMode}
+            onChange={(e) => setSettings({ ...settings, bothMode: e.target.value as any })}
+            className="select select-bordered mt-2"
+          >
+            <option value="alternate">{t('Alternate (Original → Translation)')}</option>
+            <option value="simultaneous">{t('Side by Side')}</option>
+          </select>
+
+          <div className="voice-selection mt-4">
+            <label className="label">
+              <span className="label-text">{t('Voice for Original')}</span>
+            </label>
+            <VoicePicker
+              language={bookLanguage}
+              value={settings.originalVoice}
+              onChange={(voice) => setSettings({ ...settings, originalVoice: voice })}
+            />
+
+            <label className="label mt-2">
+              <span className="label-text">{t('Voice for Translation')}</span>
+            </label>
+            <VoicePicker
+              language={translationLanguage}
+              value={settings.translationVoice}
+              onChange={(voice) => setSettings({ ...settings, translationVoice: voice })}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+```
+
+**TTS Controller Logic**:
+```typescript
+class TTSController {
+  async speakSentence(sentence: string, translatedSentence?: string) {
+    const mode = this.translationSettings.mode;
+
+    switch (mode) {
+      case 'original':
+        await this.backend.speak(sentence, this.voice, this.rate);
+        break;
+
+      case 'translation':
+        if (translatedSentence) {
+          await this.backend.speak(translatedSentence, this.voice, this.rate);
+        } else {
+          // Fallback to original if no translation
+          await this.backend.speak(sentence, this.voice, this.rate);
+        }
+        break;
+
+      case 'both':
+        if (this.translationSettings.bothMode === 'alternate') {
+          // Speak original first
+          await this.backend.speak(
+            sentence,
+            this.translationSettings.originalVoice || this.voice,
+            this.rate
+          );
+
+          // Brief pause
+          await this.sleep(500);
+
+          // Then speak translation
+          if (translatedSentence) {
+            await this.backend.speak(
+              translatedSentence,
+              this.translationSettings.translationVoice || this.voice,
+              this.rate * 0.9  // Slightly slower for translation
+            );
+          }
+        } else {
+          // Simultaneous mode: overlay or side-by-side audio (advanced feature)
+          await this.speakBothSimultaneously(sentence, translatedSentence);
+        }
+        break;
+    }
+  }
+}
+```
+
+**Benefits**:
+- Language learning enhancement
+- Flexibility for bilingual readers
+- Accessibility for translated content
+- Pronunciation comparison
+
+**Files**:
+- `src/app/reader/components/tts/TTSSettings.tsx` - Settings UI
+- `src/app/reader/utils/tts/TTSController.ts` - Translation mode logic
+- `src/types/tts.ts` - Type definitions
+
+---
+
+**Last Updated**: Documentation for commits through dd5371d2 (November 2025, v0.9.90)
 **Related Documents**: [translation-system](../translation-system/index.md), [annotation-system](../annotation-system/index.md), [cross-platform-support](../cross-platform-support/index.md)

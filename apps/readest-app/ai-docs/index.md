@@ -1,6 +1,6 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `33b2ba16` (0.8.5 → 0.9.67 releases)
+**Version**: Documentation for commits `571baf98` through `dd5371d2` (0.8.5 → 0.9.90 releases)
 **Last Updated**: November 2025
 
 ## Introduction
@@ -1446,7 +1446,128 @@ None - all changes are backward compatible
 
 ---
 
-**Version**: Documentation for commits `571baf98` through `e1691661` (v0.9.64 → v0.9.82)
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### Major Features Added (October - November 2025)
+
+1. **Screen Brightness Control** (v0.9.83-0.9.85, #2197, #2297, #2338)
+   - Manual screen brightness adjustment during reading
+   - Auto screen brightness option
+   - Non-linear brightness slider for better low-value control
+   - Platform-specific implementation (iOS, Android, desktop)
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+2. **Custom Background Images** (v0.9.85-0.9.86, #2214, #2225)
+   - Support for custom background images while reading
+   - Global and per-book background image settings
+   - Image opacity and blending controls
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+3. **Custom Highlight Color Picker** (v0.9.88, #2273)
+   - Customize highlight colors with hex color picker
+   - Set custom colors for all five highlight styles
+   - Responsive layout for color options
+   - **See**: [annotation-system/index.md](./annotation-system/index.md)
+
+4. **Enhanced Keyboard Shortcuts** (v0.9.83-0.9.88, #2170, #2176, #2291)
+   - Toggle bookmarks with keyboard shortcut
+   - Toggle sidebar visibility
+   - Import books shortcut
+   - Close window shortcut (Ctrl/Cmd+W)
+   - Shift+Space to go backward
+   - Navigate prev/next sections
+   - **See**: [annotation-system/keyboard-shortcuts.md](./annotation-system/keyboard-shortcuts.md)
+
+5. **Cloud Storage Expansion** (v0.9.89, #2325, #2331)
+   - Expand cloud storage with one-time payment
+   - IAP support for iOS and Android storage expansion
+   - Premium storage tiers
+   - **See**: [auth-sync/index.md](./auth-sync/index.md)
+
+6. **E-Ink Mode Enhancements** (v0.9.88-0.9.89, #2257, #2299, #2313)
+   - Disable animation option for E-Ink displays
+   - Underline text decoration for links in E-Ink mode
+   - Improved readability for progress and section info
+   - **See**: [cross-platform-support/index.md](./cross-platform-support/index.md)
+
+7. **TTS Improvements** (v0.9.87-0.9.89, #2242, #2244, #2248, #2272, #2310)
+   - More accurate scrolling to highlighted text in TTS
+   - Fixed TTS crashes on Android
+   - Better TTS indicator visibility
+   - Avoid using AnaNeural as default English voice
+   - Target language selection for TTS on translated books
+   - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
+
+8. **Security Enhancements** (v0.9.90, #2342)
+   - XHTML sanitization to prevent XSS attacks
+   - Safe HTML handling when scripts are disabled
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+9. **Android Custom Data Location** (v0.9.88, #2292)
+   - Support for custom data location on external SD card
+   - Better storage management on Android
+   - **See**: [cross-platform-support/android.md](./cross-platform-support/android.md)
+
+10. **iOS Platform Improvements** (v0.9.89, #2302, #2312)
+    - Detect and recover from WebContent process termination
+    - Restore last page if app terminated in background
+    - **See**: [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+### Enhancements (0.9.83 - 0.9.90 Period)
+
+- **Keyboard Shortcuts**:
+  - GNOME Human Interface Guidelines compatibility (#2170)
+  - Consistent shortcut handling across platforms
+
+- **Layout & Reading Experience**:
+  - Draw annotations of current section on load (#2174)
+  - Scrolling/panning in zoomed PDFs (#2194)
+  - More sensitive snap to paginate (#2256)
+  - Smooth Arrow Up/Down scrolling (#2306)
+  - Click both sides of screen to paginate forward option (#2305)
+  - Override book layout no longer overrides explicit text alignment (#2254)
+
+- **PDF Enhancements**:
+  - Fixed inline image rendering (#2266)
+  - Better zoom and pan handling (#2194)
+
+- **Footnotes**:
+  - Support for definition list footnotes (#2279)
+  - Improved footnote parsing (#2237)
+
+- **CSS & Styling**:
+  - Support for CSS at-rules (#2269)
+  - Fixed CSS formatter
+  - More elements added to color overrides (#2265)
+  - Proper theme color handling for code blocks in dark mode (#2290)
+
+- **Sync Performance**:
+  - Much faster sync of whole library (#2336)
+  - Batched updating of notes and books when syncing (#2337)
+  - Concurrent book uploading (#2229)
+
+- **UI/UX**:
+  - Hover to display footer bar in non-maximized windows (#2343)
+  - Responsive layout for custom highlight color options (#2303)
+  - Correct search result display when searching from selected text (#2304)
+  - More explanatory error messages when importing books (#2314)
+
+- **Language Override**:
+  - Override HTML language code with metadata language (#2227)
+
+- **Fonts**:
+  - Added PT font families (#2308)
+
+- **Themes**:
+  - Fixed auto theme mode for new reader windows (#2238)
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**Version**: Documentation for commits `571baf98` through `dd5371d2` (v0.8.5 → v0.9.90)
 **Last Updated**: November 2025
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `e1691661` for context on the codebase state at this point.**
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `dd5371d2` for context on the codebase state at this point.**
