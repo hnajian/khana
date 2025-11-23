@@ -796,6 +796,293 @@ const getAvatar = async (userId: string) => {
 - Reduced network requests
 - Better offline experience
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Subscription Management System (v0.9.62, #1491, #1493, #1494, #1499, #1501, #1505)
+
+**Major Feature**: Premium subscription management for Readest with tiered plans and payment integration.
+
+**Overview**: Users can upgrade to premium plans to unlock additional features, increased storage, and higher usage quotas for translation and other cloud services.
+
+**Subscription Tiers**:
+1. **Free Plan**:
+   - 500MB cloud storage
+   - 500K characters/month DeepL translation
+   - Basic cloud sync
+   - Ad-supported (optional)
+
+2. **Premium Plan** ($4.99/month or $49.99/year):
+   - 5GB cloud storage
+   - 2M characters/month DeepL translation
+   - Priority sync
+   - No ads
+   - Early access to new features
+
+3. **Pro Plan** ($9.99/month or $99.99/year):
+   - Unlimited cloud storage
+   - Unlimited DeepL translation
+   - Priority support
+   - Advanced features
+   - Custom domain for web version
+
+**Architecture**:
+
+```
+Frontend                          Backend                     External
+┌─────────────────┐              ┌──────────────────┐        ┌────────────┐
+│ Subscription UI │─────────────▶│ Subscription API │────────│  Stripe    │
+│  - Plan cards   │              │  - Create        │        │  Payment   │
+│  - Upgrade CTA  │              │  - Cancel        │        └────────────┘
+│  - Status       │              │  - Webhook       │
+└─────────────────┘              └──────────────────┘
+                                          │
+                                          ▼
+                                 ┌──────────────────┐
+                                 │   Supabase DB    │
+                                 │  - subscriptions │
+                                 │  - payments      │
+                                 │  - usage_stats   │
+                                 └──────────────────┘
+```
+
+**Implementation** (`src/app/api/subscription/route.ts`):
+```typescript
+// Subscription API endpoint
+export async function POST(request: Request) {
+  const { userId, plan } = await request.json();
+
+  // Create Stripe checkout session
+  const session = await stripe.checkout.sessions.create({
+    customer_email: user.email,
+    mode: 'subscription',
+    line_items: [{
+      price: STRIPE_PRICES[plan],
+      quantity: 1,
+    }],
+    success_url: `${APP_URL}/subscription/success`,
+    cancel_url: `${APP_URL}/subscription/cancel`,
+  });
+
+  return NextResponse.json({ sessionId: session.id });
+}
+
+// Stripe webhook handler
+export async function handleWebhook(event: Stripe.Event) {
+  switch (event.type) {
+    case 'checkout.session.completed':
+      await activateSubscription(event.data.object);
+      break;
+    case 'invoice.payment_succeeded':
+      await renewSubscription(event.data.object);
+      break;
+    case 'customer.subscription.deleted':
+      await cancelSubscription(event.data.object);
+      break;
+  }
+}
+```
+
+**Database Schema** (`supabase/migrations/subscription.sql`):
+```sql
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id),
+  plan VARCHAR(20) NOT NULL CHECK (plan IN ('free', 'premium', 'pro')),
+  status VARCHAR(20) NOT NULL CHECK (status IN ('active', 'canceled', 'expired')),
+  stripe_subscription_id VARCHAR(255),
+  current_period_start TIMESTAMP,
+  current_period_end TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+```
+
+**Frontend Components**:
+
+1. **Plan Cards** (`src/app/subscription/components/PlanCard.tsx`):
+   ```typescript
+   function PlanCard({ plan, currentPlan }: PlanCardProps) {
+     const features = PLAN_FEATURES[plan];
+     const isCurrentPlan = plan === currentPlan;
+
+     return (
+       <div className="plan-card">
+         <h3>{plan.name}</h3>
+         <div className="price">
+           ${plan.monthlyPrice}/mo
+           {plan.yearlyPrice && (
+             <span className="yearly">or ${plan.yearlyPrice}/yr (save 20%)</span>
+           )}
+         </div>
+
+         <ul className="features">
+           {features.map(f => <li key={f}>{f}</li>)}
+         </ul>
+
+         {isCurrentPlan ? (
+           <button disabled>Current Plan</button>
+         ) : (
+           <button onClick={() => upgradeToPlan(plan)}>
+             {plan.price > currentPlan.price ? 'Upgrade' : 'Downgrade'}
+           </button>
+         )}
+       </div>
+     );
+   }
+   ```
+
+2. **Subscription Status** (`src/app/settings/components/SubscriptionStatus.tsx`):
+   - Current plan display
+   - Renewal date
+   - Usage statistics (storage, translation quota)
+   - Manage subscription button (cancel, update payment method)
+
+**Web vs Tauri Implementation**:
+
+**Web** (`src/app/subscription/web/SubscriptionManager.tsx`):
+- Stripe Checkout integration
+- Redirect to Stripe hosted page
+- Return URL handling
+- Session restoration after payment
+
+**Tauri** (`src/app/subscription/tauri/SubscriptionManager.tsx`):
+- In-app browser for Stripe Checkout
+- Deep link handling for return URLs
+- Native payment prompts (iOS, Android)
+- Platform-specific receipt validation
+
+**Platform-Specific Payment** (`src-tauri/src/payment.rs`):
+```rust
+#[cfg(target_os = "ios")]
+use app_store_connect::InAppPurchase;
+
+#[cfg(target_os = "android")]
+use google_play_billing::BillingClient;
+
+#[tauri::command]
+async fn purchase_subscription(plan: String) -> Result<Receipt> {
+    #[cfg(target_os = "ios")]
+    {
+        let purchase = InAppPurchase::new();
+        let receipt = purchase.buy_product(&plan).await?;
+        Ok(receipt)
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        let billing = BillingClient::new();
+        let receipt = billing.purchase_subscription(&plan).await?;
+        Ok(receipt)
+    }
+
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        // Web/desktop: Use Stripe
+        Err("Use Stripe checkout for this platform".into())
+    }
+}
+```
+
+**Subscription Enforcement**:
+
+```typescript
+// Check subscription before allowing feature
+const useFeatureGate = (feature: string) => {
+  const { subscription } = useAuth();
+
+  const canUse = useMemo(() => {
+    const requiredPlan = FEATURE_REQUIREMENTS[feature];
+    const currentPlanLevel = PLAN_LEVELS[subscription.plan];
+    const requiredPlanLevel = PLAN_LEVELS[requiredPlan];
+
+    return currentPlanLevel >= requiredPlanLevel;
+  }, [subscription, feature]);
+
+  return canUse;
+};
+
+// Usage in components
+function TranslationFeature() {
+  const canUseDeepL = useFeatureGate('deepl_translation');
+
+  if (!canUseDeepL) {
+    return (
+      <UpgradePrompt
+        feature="DeepL Translation"
+        requiredPlan="premium"
+        message="Upgrade to Premium for unlimited DeepL translations"
+      />
+    );
+  }
+
+  return <TranslationUI />;
+}
+```
+
+**Usage Tracking** (`src/utils/usageTracking.ts`):
+```typescript
+// Track feature usage against quotas
+export class UsageTracker {
+  async trackTranslation(userId: string, characters: number) {
+    const usage = await getUsageToday(userId);
+    const subscription = await getSubscription(userId);
+    const quota = QUOTAS[subscription.plan].translation;
+
+    if (usage.translation + characters > quota) {
+      throw new QuotaExceededError('Translation quota exceeded for today');
+    }
+
+    await incrementUsage(userId, 'translation', characters);
+  }
+
+  async trackStorage(userId: string, bytes: number) {
+    const usage = await getTotalUsage(userId);
+    const subscription = await getSubscription(userId);
+    const quota = QUOTAS[subscription.plan].storage;
+
+    if (usage.storage + bytes > quota) {
+      throw new QuotaExceededError('Storage quota exceeded');
+    }
+
+    await incrementUsage(userId, 'storage', bytes);
+  }
+}
+```
+
+**Files**:
+- `src/app/subscription/page.tsx` - Subscription management page
+- `src/app/api/subscription/route.ts` - Subscription API endpoints
+- `src/app/api/stripe/webhook/route.ts` - Stripe webhook handler
+- `src/components/UpgradePrompt.tsx` - Upgrade call-to-action component
+- `src/hooks/useSubscription.ts` - Subscription state hook
+- `src/utils/usageTracking.ts` - Quota and usage tracking
+- `src-tauri/src/payment.rs` - Native payment integration
+
+**CORS Fix** (v0.9.62, #1493):
+- Added CORS middleware for subscription API
+- Fixed cross-origin issues for Stripe callbacks
+- Secure origin validation
+
+**Supabase RLS** (v0.9.62, #1501):
+- Row-level security policies for subscription data
+- Users can only access their own subscription
+- Admin role for support queries
+
+**Settings Menu Integration** (v0.9.62, #1505):
+- "Upgrade to Premium" option in settings
+- Current plan display in profile
+- Quick access to subscription management
+
+**Status Badge** (v0.9.62, #1514):
+- Fixed action button styling in plan cards
+- Clear "Subscribe" vs "Current Plan" vs "Manage" states
+- Loading states during payment processing
+
+---
+
 ## Future Enhancements
 
 ### Planned Features
@@ -807,6 +1094,7 @@ const getAvatar = async (userId: string) => {
 5. **Encryption**: End-to-end encryption for sensitive notes
 6. **Selective sync**: Choose which books to sync
 7. **Family sharing**: Share books and notes with family members
+8. **Team plans**: Shared libraries for organizations
 
 ### Integration Opportunities
 

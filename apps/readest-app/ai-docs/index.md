@@ -1,6 +1,6 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `def157ca` (0.8.5 → 0.9.43 releases)
+**Version**: Documentation for commits `571baf98` through `f5b686ab` (0.8.5 → 0.9.63 releases)
 **Last Updated**: November 2025
 
 ## Introduction
@@ -914,4 +914,159 @@ None - all changes are backward compatible
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `def157ca` for context on the codebase state at this point.**
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Major Features Added (March - June 2025)
+
+1. **Subscription Management** (v0.9.62)
+   - Premium subscription tiers (Free, Premium, Pro)
+   - Stripe payment integration for web/desktop
+   - Native payment integration for iOS/Android
+   - Usage quota management (storage, translation)
+   - Subscription status display in settings
+   - **See**: [auth-sync/index.md](./auth-sync/index.md) (Subscription Management section)
+
+2. **Bilingual Translation** (v0.9.49)
+   - Full book translation with side-by-side display
+   - TOC translation (#1273)
+   - Hide/show original text option (#1511)
+   - Translation header auto-hide on mobile (#1274)
+   - **See**: [translation-system/index.md](./translation-system/index.md)
+
+3. **Bilingual TTS** (v0.9.49-0.9.50, #1230, #1263)
+   - Two voices for bilingual books
+   - Automatic language detection per sentence
+   - Script-based language inference (#1233)
+   - Voice selection UI for each language
+   - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
+
+4. **Native Android TTS** (v0.9.56-0.9.57, #1376, #1387, #1394)
+   - System TTS engine integration
+   - Offline TTS support
+   - Better battery efficiency
+   - Google TTS, Samsung TTS compatibility
+   - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
+
+5. **Markdown Notes** (v0.9.52, #1315)
+   - Full markdown syntax support
+   - Editor/preview split mode
+   - Syntax highlighting for code blocks
+   - Export notes as markdown files
+   - **See**: [annotation-system/index.md](./annotation-system/index.md)
+
+6. **Notebook Search** (v0.9.52, #1318)
+   - Full-text search across all notes and highlights
+   - Filter by book, color, type
+   - Sort by date or relevance
+   - Jump to location from search results
+   - **See**: [annotation-system/index.md](./annotation-system/index.md)
+
+7. **iPad Split-Screen Mode** (v0.9.58, #1416)
+   - Native iPad split-screen support
+   - Resizable sidebars (#1415)
+   - Optimized layouts for iPad
+   - **See**: [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+8. **Individual Margin Adjustment** (v0.9.58, #1410, #1413)
+   - Separate controls for top, bottom, left, right margins
+   - Per-book margin settings
+   - Multiple columns in portrait mode (#1413)
+   - **See**: [settings-system/reader-ui-settings.md](./settings-system/reader-ui-settings.md)
+
+9. **MOBI Performance Optimization** (v0.9.63, #1547)
+   - Speed up opening for large MOBI books
+   - Improved TOC handling (#1542)
+   - Link navigation fixes (#1528)
+   - Empty fragments handling (#2456)
+
+### Enhancements (0.9.44 - 0.9.63 Period)
+
+- **Translation**:
+  - Daily DeepL quota management (#1349, #1363)
+  - Punctuation post-processing (#1245)
+  - Lazy loading optimization (#1282)
+  - Responsive popup on mobile (#1160)
+
+- **TTS**:
+  - Media session with speaking sentence (#1289)
+  - Read from last sentence (#1291, #1293)
+  - Skip empty speech at chapter end (#1243)
+  - Independent TTS per book view (#1411)
+  - Keyboard shortcut `T` to toggle (#1405)
+  - Annotation tools work with TTS (#1406)
+  - Translation with background TTS (#1399)
+
+- **Settings**:
+  - Invert image color in dark mode (#1223)
+  - Opt-out telemetry option (#1236)
+  - TOC sort by page number (#1308)
+  - Remaining pages in chapter (#1478)
+  - Remaining minutes in chapter (#1326)
+  - Always show status bar (#1417)
+  - Override book fg/bg color (#1335)
+  - Parallel reading toggle (#1504)
+  - Reset settings option (#1475)
+
+- **Library Management**:
+  - Select all button in select mode (#1209)
+  - Show current books count (#1312)
+  - Update bookshelf after import/delete (#1314, #1331)
+  - Delete cloud backup only (#1546)
+
+- **Annotations**:
+  - Show annotation create time (#1412)
+  - Notebook layout tweaks (#1319)
+  - Restore view settings when reopening (#1400)
+  - Annotation tools work when TTS enabled (#1406)
+
+- **Cross-Platform (iOS/iPad)**:
+  - Split-screen mode support (#1416)
+  - Resizable sidebars on iPad (#1415)
+  - Import reliability improvements (#1439)
+  - Smoother orientation changes (#1441)
+  - Safe area insets (#1408)
+  - Splash screen and icon improvements (#1450)
+
+- **Cross-Platform (Android)**:
+  - Native TTS engine (#1387)
+  - Overlay scrollbar for TOC (#1506)
+  - Compatibility fixes (#1394)
+
+- **Custom CSS & UI**:
+  - Custom CSS for reader UI (#1466)
+  - Cover crop/fit option (#1469)
+  - Fitted cover images (#1476, #1483)
+  - Non-ASCII character support
+
+- **Format Support**:
+  - MOBI link handling improvements (#1528, #1542)
+  - Large MOBI optimization (#1547)
+  - Empty fragments handling (#2456)
+  - Table scaling to fit constraints (#2455)
+
+- **Internationalization**:
+  - Thai (th-TH) translations added (#1548)
+  - Additional CJK fonts (#1484)
+
+- **Other**:
+  - Book details modal with HTML description (#1317)
+  - CJK font loading optimization (#1323)
+  - PDF.js bump to v4 (#1325)
+  - Supabase.js and Next.js updates (#1361, #1362)
+  - Select filtered books when activating select all (#1237)
+  - Trigger library update after import (#1336)
+  - Exit select mode when all deleted (#1350)
+  - Deleted notes synchronization (#1357)
+  - Syntax highlighting for code (#1386)
+  - Client error handling (#1389)
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**Version**: Documentation for commits `def157ca` through `f5b686ab` (v0.9.44 → v0.9.63)
+**Last Updated**: November 2025
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `f5b686ab` for context on the codebase state at this point.**

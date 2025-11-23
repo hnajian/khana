@@ -551,5 +551,320 @@ const highlightCurrentSentence = (sentenceCfi: string) => {
 
 ---
 
-**Last Updated**: Documentation for commits through def157ca (November 2025)
-**Related Documents**: [cross-platform-support](../cross-platform-support/index.md), [settings-system](../settings-system/index.md), [internationalization](../internationalization/index.md)
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Bilingual TTS (v0.9.49-0.9.50, #1230, #1263)
+
+**Major Feature**: Support for bilingual text-to-speech with different voices for different languages.
+
+**Overview**: When reading bilingual books (with both original and translated text), TTS can now automatically switch between two voices based on language detection.
+
+**Key Features**:
+- Automatic language detection per sentence/paragraph
+- Two voice selection (one for each language)
+- Seamless voice switching during playback
+- Language inference from script type
+- Voice pairing persistence per book
+
+**Implementation** (`src/app/reader/utils/tts/TTSController.ts`):
+```typescript
+interface BilingualTTSConfig {
+  primaryVoice: Voice;      // For primary language (e.g., English)
+  secondaryVoice: Voice;    // For secondary language (e.g., Chinese)
+  primaryLang: string;
+  secondaryLang: string;
+}
+
+class TTSController {
+  async playBilingual(text: string, config: BilingualTTSConfig) {
+    const detectedLang = inferLanguageFromScript(text);
+    const voice = detectedLang === config.primaryLang
+      ? config.primaryVoice
+      : config.secondaryVoice;
+
+    await this.speak(text, voice);
+  }
+}
+```
+
+**UI Changes** (`src/app/reader/components/TTSPanel.tsx`):
+- Two voice dropdowns when bilingual mode enabled
+- Language pair selector
+- Visual indicator showing which voice is currently speaking
+- Automatic voice pairing based on book metadata
+
+**Usage Flow**:
+1. Enable bilingual translation for a book
+2. Open TTS panel
+3. System detects two languages in book
+4. User selects voice for each language
+5. During playback, TTS automatically switches voices based on detected language
+
+### Bilingual TTS Language Inference (v0.9.50, #1233)
+
+**Feature**: Always infer language code from script in bilingual TTS mode.
+
+**Implementation**:
+- Script-based detection (Latin, CJK, Arabic, Cyrillic, etc.)
+- Fallback to metadata language if script ambiguous
+- Per-sentence language detection for mixed content
+- Caching of language detection results
+
+**Supported Scripts**:
+- Latin (English, French, Spanish, etc.)
+- CJK (Chinese, Japanese, Korean)
+- Arabic
+- Cyrillic (Russian, Ukrainian, etc.)
+- Devanagari (Hindi, Sanskrit, etc.)
+- Thai, Hebrew, Greek
+
+**File**: `src/app/reader/utils/tts/languageInference.ts`
+
+### Voice Selection in Bilingual TTS (v0.9.50, #1263)
+
+**Feature**: Enhanced voice selection UI for bilingual mode.
+
+**Components**:
+- Primary voice dropdown (language 1)
+- Secondary voice dropdown (language 2)
+- Language pair indicator
+- Preview buttons for each voice
+- Voice quality indicators (neural vs standard)
+
+**Voice Filtering**:
+- Filter voices by detected book languages
+- Show only compatible voices for each language
+- Mark recommended voices (neural quality)
+- Recent voice history
+
+### Native Android TTS (v0.9.56-0.9.57, #1376, #1387, #1394)
+
+**Major Feature**: Integration with Android's native TTS engine as an additional backend option.
+
+**Overview**: Users on Android can now use the system's built-in TTS engine, which offers better integration with device settings and potential offline support.
+
+**Backends Available on Android**:
+1. **Edge TTS** - Microsoft neural voices (default, requires network)
+2. **Web Speech API** - Browser-based synthesis
+3. **Native Android TTS** - System TTS engine (NEW)
+
+**Architecture**:
+
+```
+TTSController
+├── EdgeTTSBackend (WebSocket to Microsoft)
+├── WebSpeechBackend (Browser API)
+└── AndroidTTSBackend (Tauri plugin) ← NEW
+```
+
+**Implementation** (`src-tauri/src/plugins/tts.rs`):
+```rust
+use android_speech::{TextToSpeech, UtteranceProgressListener};
+
+#[tauri::command]
+fn speak_android(text: String, voice: String, rate: f32) -> Result<()> {
+    let tts = TextToSpeech::new()?;
+    tts.set_voice(&voice)?;
+    tts.set_speech_rate(rate)?;
+    tts.speak(&text, QueueMode::Flush, None)?;
+    Ok(())
+}
+```
+
+**Frontend Integration** (`src/app/reader/utils/tts/AndroidTTSBackend.ts`):
+```typescript
+export class AndroidTTSBackend implements TTSBackend {
+  async speak(text: string, voice: Voice, rate: number): Promise<void> {
+    if (!isAndroid) {
+      throw new Error('Android TTS only available on Android platform');
+    }
+
+    await invoke('speak_android', {
+      text,
+      voice: voice.name,
+      rate
+    });
+  }
+
+  async getVoices(): Promise<Voice[]> {
+    const voices = await invoke('get_android_voices');
+    return voices.map(v => ({
+      name: v.name,
+      lang: v.locale,
+      backend: 'android'
+    }));
+  }
+}
+```
+
+**Benefits**:
+- Offline TTS support (if voices installed)
+- Better battery efficiency
+- Seamless integration with Android accessibility settings
+- Respects system TTS settings
+- Works with Google TTS, Samsung TTS, etc.
+
+**Hotfix** (v0.9.57, #1394):
+- Resolved compatibility issues with Android Text-to-Speech API
+- Fixed voice enumeration on older Android versions
+- Improved error handling and fallback logic
+
+### TTS Media Session Integration (v0.9.51, #1289)
+
+**Feature**: Display speaking sentence and chapter info in TTS media session.
+
+**Implementation**:
+- Media session metadata updated in real-time
+- Shows current sentence being spoken
+- Displays chapter title and book information
+- Album art shows book cover
+
+**UI Integration**:
+- Android notification panel shows TTS controls
+- Lock screen displays current sentence
+- Wear OS integration for smartwatches
+- Desktop media controls (macOS, Windows, Linux)
+
+**File**: `src/app/reader/utils/tts/mediaSession.ts`
+
+### Read from Last Speaking Location (v0.9.51, #1291, #1293)
+
+**Feature**: TTS remembers and resumes from the last spoken sentence.
+
+**Implementation** (`src/app/reader/utils/tts/TTSController.ts`):
+```typescript
+interface TTSPosition {
+  cfi: string;              // EPUB CFI of last sentence
+  sentenceIndex: number;    // Index within chapter
+  timestamp: number;        // When last played
+}
+
+// Save position on pause/stop
+savePosition() {
+  const position: TTSPosition = {
+    cfi: this.currentCFI,
+    sentenceIndex: this.currentSentenceIndex,
+    timestamp: Date.now()
+  };
+  localStorage.setItem(`tts_position_${bookHash}`, JSON.stringify(position));
+}
+
+// Restore position on play
+async restorePosition() {
+  const saved = localStorage.getItem(`tts_position_${bookHash}`);
+  if (saved) {
+    const position = JSON.parse(saved);
+    await this.seek(position.cfi, position.sentenceIndex);
+  }
+}
+```
+
+**User Experience**:
+1. User starts TTS playback
+2. User closes app or stops playback
+3. User reopens book later
+4. User clicks Play button
+5. TTS resumes from last sentence (not from beginning)
+
+**More Robust Implementation** (v0.9.51, #1293):
+- Multiple save points for redundancy
+- Validation of saved CFI before restoration
+- Fallback to chapter start if position invalid
+- Cross-device position sync (if cloud sync enabled)
+
+### Skip Empty Speech at Chapter End (v0.9.49, #1243)
+
+**Feature**: TTS now skips speaking when text is empty at the end of some chapters.
+
+**Issue**: Some EPUB files have empty `<p>` tags or whitespace-only elements at chapter boundaries, causing TTS to pause unnecessarily.
+
+**Fix**:
+```typescript
+const filterEmptySentences = (sentences: string[]) => {
+  return sentences.filter(s => {
+    const trimmed = s.trim();
+    return trimmed.length > 0 && !/^[\s\n\r]+$/.test(trimmed);
+  });
+};
+```
+
+**File**: `src/app/reader/utils/tts/sentenceSplitter.ts`
+
+### Each Book View Has Its Own TTS Controller (v0.9.58, #1411)
+
+**Feature**: When viewing multiple books simultaneously (split-screen or tabs), each book now has its own independent TTS controller.
+
+**Benefits**:
+- Play TTS in one book without affecting others
+- Different voices/rates for different books
+- Isolated playback state
+- Better resource management
+
+**Implementation**:
+```typescript
+// readerStore.ts
+interface ViewState {
+  id: string;
+  book: Book;
+  ttsController: TTSController; // ← One per view
+  // ...
+}
+```
+
+### TTS Keyboard Shortcut (v0.9.57, #1405)
+
+**Feature**: Press `T` key to toggle TTS playback on/off.
+
+**Shortcuts**:
+- `T` - Toggle play/pause
+- `Shift+T` - Stop TTS
+- `[` - Previous sentence
+- `]` - Next sentence
+- `Ctrl/Cmd+T` - Open TTS settings panel
+
+**File**: `src/app/reader/hooks/useKeyboardShortcuts.ts`
+
+### Annotation Tools Work with TTS (v0.9.58, #1406)
+
+**Feature**: Annotation tools (highlight, note, translate) now function properly when TTS is enabled.
+
+**Issue**: Previously, text selection for annotations conflicted with TTS sentence highlighting.
+
+**Fix**:
+- Separate event handlers for TTS and annotations
+- TTS highlighting uses read-only overlay
+- User text selections work independently
+- Both systems coexist without interference
+
+**Files**:
+- `src/app/reader/components/annotator/Annotator.tsx`
+- `src/app/reader/utils/tts/TTSController.ts`
+
+### Translation with Background TTS (v0.9.57, #1399)
+
+**Feature**: Translation popup now works when TTS is playing in the background.
+
+**Implementation**:
+- TTS continues playing while translation popup is open
+- Translation doesn't interrupt TTS playback
+- Close translation popup to return focus to TTS
+
+**Use Case**: User listens to audiobook while occasionally looking up translations.
+
+### TTS Disables Media Session to Keep Alive (v0.9.52, #1333)
+
+**Feature**: Disabled media session controls to prevent TTS from being suspended on some platforms.
+
+**Issue**: Media session "stop" event from system would terminate TTS unexpectedly.
+
+**Compromise**:
+- Media controls disabled on problematic platforms
+- TTS remains active in background
+- Manual controls in app still functional
+
+**Note**: Re-enabled in later versions with better event handling.
+
+---
+
+**Last Updated**: Documentation for commits through f5b686ab (November 2025, v0.9.63)
+**Related Documents**: [translation-system](../translation-system/index.md), [annotation-system](../annotation-system/index.md), [cross-platform-support](../cross-platform-support/index.md)
