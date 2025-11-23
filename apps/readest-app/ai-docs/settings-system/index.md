@@ -409,3 +409,360 @@ To allow users to backup/share settings:
 
 ---
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Invert Image Color in Dark Mode (v0.9.48, #1223)
+
+**Feature**: Option to automatically invert image colors when using dark mode for better readability.
+
+**Implementation**:
+- CSS filter applied to images in dark mode
+- User toggle in settings panel
+- Per-book preference saved in BookConfig
+
+**Settings Location**: Color Panel > "Invert images in dark mode"
+
+**CSS Applied**:
+```css
+.dark-mode img {
+  filter: invert(1) hue-rotate(180deg);
+}
+```
+
+**Use Cases**:
+- Reading technical books with diagrams
+- Comics/manga with dark backgrounds
+- Books with white-background screenshots
+
+**File**: `src/app/reader/components/settings/ColorPanel.tsx`
+
+### Opt-Out Telemetry (v0.9.48, #1236)
+
+**Feature**: Privacy option to disable usage telemetry and analytics.
+
+**Settings**:
+- Toggle in Misc Panel > "Send anonymous usage data"
+- Default: Enabled (can be disabled)
+- Preference persisted globally
+
+**What's Tracked (when enabled)**:
+- Feature usage statistics
+- Performance metrics
+- Crash reports
+- No personal information or reading content
+
+**Implementation** (`src/utils/analytics.ts`):
+```typescript
+const sendAnalytics = (event: string, data: any) => {
+  const telemetryEnabled = settingsStore.getState().telemetryEnabled;
+
+  if (!telemetryEnabled) {
+    return; // No tracking when disabled
+  }
+
+  // Send to PostHog/analytics service
+  posthog.capture(event, data);
+};
+```
+
+**File**: `src/store/settingsStore.ts`
+
+### TOC Sort by Page Number (v0.9.51, #1308)
+
+**Feature**: Option to sort Table of Contents by page number instead of hierarchical structure.
+
+**Settings Location**: Sidebar > TOC tab > Sort options
+
+**Modes**:
+- **Hierarchical** (default): Show TOC as nested structure
+- **By Page**: Flatten and sort entries by page number
+
+**Implementation** (`src/app/reader/components/sidebar/TOCView.tsx`):
+```typescript
+const sortedTOC = useMemo(() => {
+  if (sortByPage) {
+    return [...tocItems].sort((a, b) => a.pageNum - b.pageNum);
+  }
+  return tocItems; // Keep original hierarchy
+}, [tocItems, sortByPage]);
+```
+
+**Use Cases**:
+- Quickly finding a specific page reference
+- Linear reading without nested sections
+- Reference books with non-hierarchical structure
+
+**File**: `src/app/reader/components/sidebar/TOCView.tsx`
+
+### Remaining Time Display (v0.9.52-0.9.61, #1326, #1478)
+
+**Feature**: Display estimated reading time remaining in current chapter or entire book.
+
+**Settings Options**:
+1. **Remaining Pages in Chapter** (#1478)
+   - Shows: "23 pages left in chapter"
+   - Location: Footer status bar
+   - Calculation: Total chapter pages - current page
+
+2. **Remaining Minutes in Chapter** (#1326)
+   - Shows: "15 min left in chapter"
+   - Calculation: (Remaining pages × average read time per page)
+   - Adapts to user's reading speed over time
+
+**Implementation** (`src/app/reader/components/Footer.tsx`):
+```typescript
+const calculateRemainingTime = (currentPage: number, totalPages: number, avgWPM: number) => {
+  const remainingPages = totalPages - currentPage;
+  const avgWordsPerPage = 300; // Estimated
+  const remainingWords = remainingPages * avgWordsPerPage;
+  const minutesRemaining = Math.ceil(remainingWords / avgWPM);
+
+  return minutesRemaining;
+};
+```
+
+**Settings Location**: Settings > Layout Panel > "Show remaining time"
+
+**Display Modes**:
+- Pages only
+- Minutes only
+- Both pages and minutes
+- Hide (default)
+
+**Files**:
+- `src/app/reader/components/Footer.tsx`
+- `src/store/settingsStore.ts`
+
+### Always Show Status Bar (v0.9.58, #1417)
+
+**Feature**: Option to keep status bar visible at all times, even in fullscreen mode.
+
+**Settings Location**: Settings > Layout Panel > "Always show status bar"
+
+**Behavior**:
+- **Enabled**: Status bar remains visible in all modes
+- **Disabled**: Status bar auto-hides in fullscreen/immersive mode
+
+**Implementation**:
+- CSS visibility override
+- Platform-specific handling (iOS safe areas)
+- Persisted per-user preference
+
+**File**: `src/app/reader/components/Footer.tsx`
+
+### Override Book Foreground/Background Color (v0.9.52, #1335)
+
+**Feature**: Force override book's embedded color scheme with user-selected colors.
+
+**Settings Location**: Settings > Color Panel > "Override book colors"
+
+**Options**:
+- Override background color
+- Override text (foreground) color
+- Override both
+- Respect book colors (default)
+
+**Implementation** (`src/app/reader/components/FoliateViewer.tsx`):
+```typescript
+const applyColorOverrides = (view: FoliateView, settings: ViewSettings) => {
+  if (settings.overrideBackgroundColor) {
+    view.setStyles({
+      background: settings.backgroundColor + ' !important'
+    });
+  }
+
+  if (settings.overrideForegroundColor) {
+    view.setStyles({
+      color: settings.foregroundColor + ' !important'
+    });
+  }
+};
+```
+
+**Use Cases**:
+- Books with poor color contrast
+- Accessibility requirements
+- Consistent reading experience across books
+
+**Files**:
+- `src/app/reader/components/settings/ColorPanel.tsx`
+- `src/types/settings.ts`
+
+### Parallel Reading Toggle (v0.9.62, #1504)
+
+**Feature**: Toggle parallel reading mode when viewing multiple books simultaneously.
+
+**Settings Location**: View menu > "Parallel Reading"
+
+**Modes**:
+- **Parallel Reading ON**: Books scroll/turn pages together synchronously
+- **Parallel Reading OFF**: Books navigate independently
+
+**Implementation** (`src/store/readerStore.ts`):
+```typescript
+const syncPageTurn = (direction: 'next' | 'prev') => {
+  const parallelReading = settingsStore.getState().parallelReading;
+  const activeViews = readerStore.getState().views;
+
+  if (parallelReading && activeViews.length > 1) {
+    // Turn page in all views simultaneously
+    activeViews.forEach(view => {
+      view.turnPage(direction);
+    });
+  } else {
+    // Turn page only in focused view
+    focusedView.turnPage(direction);
+  }
+};
+```
+
+**Use Cases**:
+- Comparing translations side-by-side
+- Reference material with main text
+- Bilingual reading
+
+**Files**:
+- `src/store/settingsStore.ts`
+- `src/app/reader/components/ReaderContent.tsx`
+
+### Reset Settings Option (v0.9.61, #1475)
+
+**Feature**: Reset all settings to factory defaults.
+
+**Settings Location**: Settings > About/Advanced > "Reset All Settings"
+
+**Reset Options**:
+1. **Reset Global Settings**: Restore default global preferences
+2. **Reset Book Settings**: Clear all per-book overrides
+3. **Reset All**: Complete reset (requires confirmation)
+
+**Implementation** (`src/store/settingsStore.ts`):
+```typescript
+const resetSettings = (scope: 'global' | 'book' | 'all') => {
+  switch (scope) {
+    case 'global':
+      settingsStore.setState(DEFAULT_SETTINGS);
+      break;
+    case 'book':
+      bookDataStore.clearAllBookConfigs();
+      break;
+    case 'all':
+      settingsStore.setState(DEFAULT_SETTINGS);
+      bookDataStore.clearAllBookConfigs();
+      localStorage.clear();
+      break;
+  }
+
+  // Save to disk
+  appService.saveSettings(settingsStore.getState());
+};
+```
+
+**Confirmation Dialog**:
+- Warning message about data loss
+- Checkbox: "I understand this cannot be undone"
+- Confirm/Cancel buttons
+
+**What Gets Reset**:
+- Font preferences
+- Color themes
+- Layout settings
+- Reading preferences
+- Custom CSS
+- Keyboard shortcuts (optional)
+
+**What's Preserved**:
+- User account
+- Library (books)
+- Reading progress
+- Annotations and notes
+
+**Files**:
+- `src/app/settings/components/ResetSettings.tsx`
+- `src/store/settingsStore.ts`
+
+### Individual Margin Adjustment (v0.9.58, #1410)
+
+**Feature**: Separate controls for top, bottom, left, and right margins instead of a single margin slider.
+
+**Settings Location**: Settings > Layout Panel > Margin Controls
+
+**UI Changes**:
+```
+Before: [========] Margin: 24px
+
+After:
+Top:    [========] 16px
+Bottom: [========] 16px
+Left:   [========] 32px
+Right:  [========] 32px
+```
+
+**Implementation** (`src/types/settings.ts`):
+```typescript
+interface ViewSettings {
+  // Old (deprecated):
+  // margin: number;
+
+  // New (v0.9.58+):
+  marginTop: number;
+  marginBottom: number;
+  marginLeft: number;
+  marginRight: number;
+}
+```
+
+**Migration**: Existing `margin` value split equally to all four sides on first load.
+
+**Constraints** (v0.9.59, #1428):
+- Top/Bottom: 0-100px
+- Left/Right: 0-200px
+- More reasonable limits based on typical use cases
+
+**Platform-Specific** (iOS, #1408):
+- Respect safe area insets
+- Additional padding for notch/home indicator
+- Automatic adjustment for device orientation
+
+**Files**:
+- `src/app/reader/components/settings/LayoutPanel.tsx`
+- `src/types/settings.ts`
+
+### Multiple Columns in Portrait Mode (v0.9.58, #1413)
+
+**Feature**: Allow more than 1 column even in portrait orientation.
+
+**Settings Location**: Settings > Layout Panel > Columns
+
+**Previous Limitation**: Portrait mode locked to 1 column
+
+**New Behavior**:
+- Portrait: 1-3 columns selectable
+- Landscape: 1-4 columns selectable
+- User preference respected regardless of orientation
+
+**Implementation** (`src/app/reader/components/FoliateViewer.tsx`):
+```typescript
+const determineColumns = (orientation: 'portrait' | 'landscape', userPref: number) => {
+  // Old logic:
+  // return orientation === 'portrait' ? 1 : userPref;
+
+  // New logic (v0.9.58+):
+  const maxColumns = orientation === 'portrait' ? 3 : 4;
+  return Math.min(userPref, maxColumns);
+};
+```
+
+**Use Cases**:
+- Large phones/tablets in portrait
+- Split-screen comparison
+- Dense text layouts
+
+**Files**:
+- `src/app/reader/components/settings/LayoutPanel.tsx`
+- `src/app/reader/components/FoliateViewer.tsx`
+
+---
+
+**Last Updated**: Documentation for commits through f5b686ab (November 2025, v0.9.63)
+**Related Documents**: [reader-ui-settings](./reader-ui-settings.md), [custom-css-editor](./custom-css-editor.md), [cross-platform-support](../cross-platform-support/index.md)

@@ -729,6 +729,84 @@ try {
 }
 ```
 
+## Version 0.9.44 - 0.9.63 Updates (def157ca → f5b686ab)
+
+### Native Android TTS Engine Integration (v0.9.56-0.9.57, #1376, #1387, #1394)
+
+**Major Feature**: Integration with Android's native Text-to-Speech engine.
+
+**Overview**: Users can now use the system's built-in TTS engine alongside Edge TTS and Web Speech API, with better offline support and battery efficiency.
+
+**See**: [text-to-speech/index.md](../text-to-speech/index.md#native-android-tts) for full documentation.
+
+**Benefits**:
+- Offline TTS support with pre-installed voices
+- Better battery efficiency
+- Respects system TTS settings
+- Works with Google TTS, Samsung TTS, and other system engines
+
+**Implementation** (`src-tauri/src/android/tts.rs`):
+```rust
+use android_speech::TextToSpeech;
+
+#[tauri::command]
+pub async fn speak_android(text: String, voice: String, rate: f32) -> Result<()> {
+    let tts = TextToSpeech::new()?;
+    tts.set_voice(&voice)?;
+    tts.set_speech_rate(rate)?;
+    tts.speak(&text, QueueMode::Flush, None)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_android_voices() -> Result<Vec<Voice>> {
+    let tts = TextToSpeech::new()?;
+    Ok(tts.get_available_voices())
+}
+```
+
+**Compatibility Fix** (v0.9.57, #1394):
+- Resolved compatibility issues on Android 8-12
+- Fixed voice enumeration on older devices
+- Improved error handling and fallback logic
+
+**Files**:
+- `src-tauri/src/android/tts.rs`
+- `src/app/reader/utils/tts/AndroidTTSBackend.ts`
+
+### Overlay Scrollbar for TOC (v0.9.62, #1506)
+
+**Feature**: Overlay scrollbar for Table of Contents on Android for better UI consistency.
+
+**Implementation**:
+- Scrollbar overlays content instead of taking space
+- Auto-hides when not scrolling
+- Touch-friendly scrollbar thumb
+
+**CSS** (`src/styles/android-scrollbar.css`):
+```css
+.toc-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.toc-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.toc-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.toc-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+```
+
+**File**: `src/app/reader/components/sidebar/TOCView.tsx`
+
+---
+
 ## Related Documentation
 
 - **[Cross-Platform Support Index](./index.md)** - Overview of all platforms
