@@ -890,6 +890,249 @@ const LibrarySearch = () => {
 
 ---
 
+## Version 0.9.68 - 0.9.78 Updates (33b2ba16 → cc3cc58d)
+
+### Delete Local Copy Feature (v0.9.70, #1773)
+
+**Feature**: Delete only the local copy of a book while keeping cloud backup intact.
+
+**Overview**: Users can now choose to delete just the local copy of a book to free up device storage, while maintaining the book in their cloud library for later re-download.
+
+**Use Cases**:
+- Free up local storage space on device
+- Keep cloud backup for archival purposes
+- Temporary removal of infrequently read books
+- Manage storage on devices with limited space
+
+**UI Options**:
+
+Book context menu now offers two deletion options:
+1. **Delete Locally** - Removes local copy, keeps cloud backup
+2. **Delete Everywhere** - Removes both local copy and cloud backup
+
+**Implementation** (`src/app/library/components/BookContextMenu.tsx`):
+```typescript
+const handleDeleteLocal = async (bookHash: string) => {
+  // Delete local file only
+  await appService.deleteBookFile(bookHash);
+
+  // Update library metadata (mark as not-downloaded)
+  libraryStore.updateBook(bookHash, {
+    isDownloaded: false,
+    localPath: null
+  });
+
+  toast.success('Local copy deleted. Book remains in cloud.');
+};
+
+const handleDeleteEverywhere = async (bookHash: string) => {
+  // Delete local file
+  await appService.deleteBookFile(bookHash);
+
+  // Delete from cloud storage
+  if (isAuthenticated()) {
+    await syncService.deleteCloudBook(bookHash);
+  }
+
+  // Remove from library
+  libraryStore.removeBook(bookHash);
+
+  toast.success('Book deleted from all locations.');
+};
+```
+
+**Confirmation Dialog**:
+```
+Delete "Book Title" locally?
+
+The book will be removed from this device, but will remain in your cloud library.
+You can re-download it anytime from the cloud.
+
+Your reading progress and notes will be preserved.
+
+[Cancel] [Delete Local Copy]
+```
+
+**Re-Download**:
+- Books deleted locally show a cloud download icon in the library
+- Click to re-download from cloud storage
+- Progress and annotations restored automatically
+
+**Files**:
+- `src/app/library/components/BookContextMenu.tsx` - Deletion options
+- `src/app/library/components/BookCard.tsx` - Download status indicator
+- `src/services/appService.ts` - File deletion logic
+- `src/services/syncService.ts` - Cloud deletion
+- `src/store/libraryStore.ts` - Library state updates
+
+### Author Sorting (Last Name First) (v0.9.75, #1865)
+
+**Feature**: Sort library books by author with last name first.
+
+**Overview**: Books can now be sorted alphabetically by author's last name, following bibliographic conventions common in libraries and catalogs.
+
+**Supported Languages**:
+- Arabic
+- English
+- German
+- Spanish
+- French
+- Hindi
+- Italian
+- Dutch
+- Polish
+- Portuguese
+- Russian
+- Thai
+- Turkish
+- Ukrainian
+- And more...
+
+**Implementation** (`src/utils/authorSort.ts`):
+```typescript
+// Extract last name from author string
+const getLastName = (authorName: string, language: string): string => {
+  // Handle different naming conventions by language
+  const nameParts = authorName.trim().split(/\s+/);
+
+  if (language === 'ar') {
+    // Arabic: last name is typically first
+    return nameParts[0];
+  } else {
+    // Western naming: last name is typically last
+    return nameParts[nameParts.length - 1];
+  }
+};
+
+// Sort books by author last name
+const sortByAuthor = (books: BookMetadata[], language: string) => {
+  return books.sort((a, b) => {
+    const lastNameA = getLastName(a.author, language);
+    const lastNameB = getLastName(b.author, language);
+    return lastNameA.localeCompare(lastNameB, language);
+  });
+};
+```
+
+**UI Integration** (`src/app/library/components/LibraryHeader.tsx`):
+```typescript
+<select
+  value={sortBy}
+  onChange={(e) => setSortBy(e.target.value)}
+>
+  <option value="title">Title</option>
+  <option value="author">Author (Last Name)</option>
+  <option value="recent">Recently Added</option>
+  <option value="lastOpened">Last Opened</option>
+</select>
+```
+
+**Example Sorting**:
+
+Before (by first name):
+- Albert Einstein
+- Carl Sagan
+- Marie Curie
+- Stephen Hawking
+
+After (by last name):
+- Marie Curie
+- Albert Einstein
+- Stephen Hawking
+- Carl Sagan
+
+**Locale-Aware Sorting**:
+- Uses `String.localeCompare()` for proper alphabetical order in each language
+- Handles diacritics and special characters correctly
+- Respects cultural naming conventions
+
+**Files**:
+- `src/utils/authorSort.ts` - Author name parsing and sorting logic
+- `src/app/library/components/LibraryHeader.tsx` - Sort dropdown UI
+- `src/store/libraryStore.ts` - Sorting state management
+
+### Library Data Resilience (v0.9.67, #1689)
+
+**Feature**: Automatic recovery from corrupted library data using backup.
+
+**Overview**: The app now maintains a backup copy of the library metadata and automatically loads it if the main library data becomes corrupted or unavailable.
+
+**Problem**:
+- Power failures or crashes during save operations could corrupt the library JSON file
+- Users would lose their entire library metadata
+- Reading progress and book organization lost
+
+**Solution**:
+
+**Backup Strategy**:
+1. **Automatic Backups**: Library data backed up on every successful save
+2. **Backup Location**: `library.json.backup` in app data directory
+3. **Corruption Detection**: JSON parse errors trigger backup load
+4. **User Notification**: Toast message when backup is loaded
+
+**Implementation** (`src/services/appService.ts`):
+```typescript
+async loadLibrary(): Promise<BookMetadata[]> {
+  try {
+    // Try to load main library file
+    const libraryData = await this.readFile('library.json');
+    const library = JSON.parse(libraryData);
+    return library;
+  } catch (mainError) {
+    console.error('Failed to load main library data:', mainError);
+
+    try {
+      // Load backup if main file fails
+      const backupData = await this.readFile('library.json.backup');
+      const library = JSON.parse(backupData);
+
+      // Notify user
+      toast.warning('Main library data was unavailable. Loaded from backup.');
+
+      // Restore main file from backup
+      await this.writeFile('library.json', backupData);
+
+      return library;
+    } catch (backupError) {
+      console.error('Failed to load backup library data:', backupError);
+
+      // Both failed - return empty library
+      toast.error('Unable to load library data. Starting with empty library.');
+      return [];
+    }
+  }
+}
+
+async saveLibrary(library: BookMetadata[]): Promise<void> {
+  const libraryData = JSON.stringify(library, null, 2);
+
+  // Save main file
+  await this.writeFile('library.json', libraryData);
+
+  // Create backup
+  await this.writeFile('library.json.backup', libraryData);
+}
+```
+
+**Recovery Process**:
+1. App attempts to load `library.json`
+2. If JSON parsing fails, load `library.json.backup`
+3. Restore main file from backup
+4. Show notification to user
+5. Continue normal operation
+
+**Additional Safety**:
+- Cloud sync provides additional backup layer
+- Export library feature for manual backups
+- Corruption-resistant JSON serialization
+
+**Files**:
+- `src/services/appService.ts` - Backup/restore logic
+- `src/services/nativeAppService.ts` - Native file operations
+- `src/store/libraryStore.ts` - Library state initialization
+
+---
+
 ## Dependencies
 
 - **Tauri Dialog API**: File picker for import
