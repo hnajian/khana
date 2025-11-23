@@ -1081,6 +1081,118 @@ export class UsageTracker {
 - Clear "Subscribe" vs "Current Plan" vs "Manage" states
 - Loading states during payment processing
 
+### Sync Status Menu (v0.9.52, #1324)
+
+**Feature**: Visual indicator in the reader's view menu showing the current synchronization status.
+
+**Purpose**: Provides users with real-time feedback about cloud sync operations, helping them understand when their progress and annotations are being synchronized.
+
+**Settings Location**: View Menu > Sync Status indicator
+
+**Status States**:
+
+1. **Synced** (✓):
+   - All changes uploaded to cloud
+   - Local and remote are in sync
+   - Green checkmark icon
+
+2. **Syncing** (⟳):
+   - Upload/download in progress
+   - Animated spinner icon
+   - Shows progress percentage (optional)
+
+3. **Pending** (⋯):
+   - Changes waiting to be synced
+   - Will sync when network available
+   - Gray dot icon
+
+4. **Error** (⚠):
+   - Sync failed
+   - Shows error message on click
+   - Red warning icon
+   - Retry button available
+
+**Implementation** (`src/app/reader/components/ViewMenu.tsx`):
+```typescript
+function SyncStatusIndicator() {
+  const { syncStatus, lastSyncTime, error } = useProgressSync();
+
+  const getStatusIcon = () => {
+    switch (syncStatus) {
+      case 'synced':
+        return <CheckCircleIcon className="text-success" />;
+      case 'syncing':
+        return <SpinnerIcon className="animate-spin text-info" />;
+      case 'pending':
+        return <DotsIcon className="text-gray-400" />;
+      case 'error':
+        return <WarningIcon className="text-error" />;
+    }
+  };
+
+  const getStatusText = () => {
+    if (syncStatus === 'synced' && lastSyncTime) {
+      return `Synced ${formatRelativeTime(lastSyncTime)}`;
+    }
+    if (syncStatus === 'error') {
+      return `Sync failed: ${error}`;
+    }
+    return syncStatus.charAt(0).toUpperCase() + syncStatus.slice(1);
+  };
+
+  return (
+    <div className="sync-status-item">
+      {getStatusIcon()}
+      <span>{getStatusText()}</span>
+      {syncStatus === 'error' && (
+        <button onClick={() => retrySync()}>Retry</button>
+      )}
+    </div>
+  );
+}
+```
+
+**Hook Integration** (`src/app/reader/hooks/useProgressSync.ts`):
+```typescript
+export function useProgressSync() {
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('pending');
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncInterval = setInterval(async () => {
+      try {
+        setSyncStatus('syncing');
+        await syncProgressToCloud();
+        setSyncStatus('synced');
+        setLastSyncTime(new Date());
+        setError(null);
+      } catch (err) {
+        setSyncStatus('error');
+        setError(err.message);
+      }
+    }, SYNC_INTERVAL);
+
+    return () => clearInterval(syncInterval);
+  }, []);
+
+  return { syncStatus, lastSyncTime, error };
+}
+```
+
+**Sync Timeout**: Default sync interval changed to 5 seconds (from 10 seconds in earlier versions) for more responsive feedback.
+
+**User Benefits**:
+- Immediate feedback on sync operations
+- Confidence that changes are saved to cloud
+- Clear error indication with retry option
+- Visibility into last successful sync time
+
+**Files**:
+- `src/app/reader/components/ViewMenu.tsx`
+- `src/app/reader/hooks/useProgressSync.ts`
+- `src/services/syncService.ts`
+
 ---
 
 ## Future Enhancements

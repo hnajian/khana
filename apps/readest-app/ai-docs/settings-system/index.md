@@ -467,6 +467,61 @@ const sendAnalytics = (event: string, data: any) => {
 
 **File**: `src/store/settingsStore.ts`
 
+### Enable JavaScript in EPUB (v0.9.52, #1295)
+
+**Feature**: Security option to allow JavaScript execution in EPUB files for interactive content.
+
+**Settings Location**: Settings > Control Panel > Security section > "Allow JavaScript"
+
+**Default**: Disabled (for security reasons)
+
+**Security Warning**: UI displays "Enable only if you trust the file" warning message
+
+**Implementation** (`src/app/reader/components/settings/ControlPanel.tsx`):
+```typescript
+<div className="form-control">
+  <label className="label cursor-pointer">
+    <span className="label-text">{t('Allow JavaScript')}</span>
+    <input
+      type="checkbox"
+      className="toggle"
+      checked={viewSettings.allowJavaScript}
+      onChange={(e) => updateViewSettings({ allowJavaScript: e.target.checked })}
+    />
+  </label>
+  <span className="text-xs text-warning opacity-70">
+    {t('Enable only if you trust the file.')}
+  </span>
+</div>
+```
+
+**Applied to Reader** (`src/libs/document.ts`):
+```typescript
+// Create EPUB view with JavaScript enabled/disabled
+const epubView = await makeEPUBView(file, {
+  allowScript: viewSettings.allowJavaScript || false,
+  // ... other options
+});
+```
+
+**Use Cases**:
+- Interactive educational books with quizzes
+- Enhanced EPUB3 content with JavaScript animations
+- Technical documentation with live code examples
+- Books with embedded widgets or calculators
+
+**Security Considerations**:
+- Disabled by default to prevent malicious scripts
+- Per-book setting (not global)
+- User must explicitly enable for each book
+- Warning message reminds users of security implications
+
+**Files**:
+- `src/app/reader/components/settings/ControlPanel.tsx`
+- `src/libs/document.ts`
+- `src/types/book.ts` (ViewSettings.allowJavaScript)
+- `packages/foliate-js/epub.js`
+
 ### TOC Sort by Page Number (v0.9.51, #1308)
 
 **Feature**: Option to sort Table of Contents by page number instead of hierarchical structure.
