@@ -1121,5 +1121,164 @@ class TTSController {
 
 ---
 
-**Last Updated**: Documentation for commits through cc3cc58d (November 2025, v0.9.78)
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Background TTS with Media Session Controls (v0.9.80, #2071, #2138)
+
+**Major Feature**: Full background TTS support with system-level media controls.
+
+**Overview**: TTS can now continue playing when the app is in the background, with full integration into system media controls (notification panel on mobile, media keys on desktop).
+
+**Desktop Media Session** (v0.9.80, #2071):
+- Integration with desktop media controls
+- Media keys (play/pause, next/previous) control TTS playback
+- System notification shows current sentence being read
+- Album art displays book cover
+
+**Implementation** (`src/app/reader/utils/tts/mediaSession.ts`):
+```typescript
+const updateMediaSession = (book: BookMetadata, sentence: string, chapterTitle: string) => {
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: book.title,
+      artist: book.authors?.join(', ') || 'Unknown Author',
+      album: chapterTitle,
+      artwork: [
+        {
+          src: book.coverUrl || '/default-cover.png',
+          sizes: '512x512',
+          type: 'image/png'
+        }
+      ]
+    });
+
+    // Set action handlers
+    navigator.mediaSession.setActionHandler('play', () => ttsController.play());
+    navigator.mediaSession.setActionHandler('pause', () => ttsController.pause());
+    navigator.mediaSession.setActionHandler('nexttrack', () => ttsController.forward());
+    navigator.mediaSession.setActionHandler('previoustrack', () => ttsController.backward());
+  }
+};
+```
+
+**Background TTS** (v0.9.80, #2138):
+- Continues playback when app is minimized or in background
+- Maintains audio session even when screen is locked
+- Auto-pauses on incoming calls or other audio events
+- Resumes playback after interruptions
+
+**Platform Support**:
+- **Desktop**: Media keys on keyboard, system media controls
+- **Android**: Notification panel controls, lock screen controls
+- **iOS**: Lock screen controls, Control Center integration
+- **Web/PWA**: Browser media notification
+
+**Background Audio Management**:
+```typescript
+// Keep audio playing in background
+const maintainBackgroundAudio = () => {
+  // iOS: Silent audio loop to keep AudioContext active
+  if (isiOS) {
+    const silentAudio = new Audio('/silent.mp3');
+    silentAudio.loop = true;
+    silentAudio.play();
+  }
+
+  // Android: Foreground service notification
+  if (isAndroid) {
+    invoke('start_tts_foreground_service', {
+      title: currentBook.title,
+      author: currentBook.authors?.join(', ')
+    });
+  }
+};
+```
+
+**User Experience**:
+1. User starts TTS playback
+2. User switches to another app or locks screen
+3. TTS continues playing in background
+4. System notification shows book title, current sentence
+5. User can control playback from notification/lock screen
+6. User returns to app - TTS state is maintained
+
+**Files**:
+- `src/app/reader/utils/tts/mediaSession.ts` - Media session integration
+- `src/app/reader/utils/tts/backgroundAudio.ts` - Background audio management
+- `src-tauri/src/tts_service.rs` - Native foreground service (Android)
+
+### TTS Language Handling Improvements (v0.9.80-0.9.82)
+
+**Handle 'und' Language Code** (v0.9.80, #2102):
+- Books with 'und' (undefined) language code now default to system language
+- Fallback to English if system language not available
+- Improved voice selection for books with missing language metadata
+
+**More Languages for Edge TTS** (v0.9.80, #2089):
+- Expanded language support for Edge TTS backend
+- Added voices for additional languages:
+  - Nordic languages (Danish, Norwegian, Swedish, Finnish)
+  - Eastern European (Czech, Polish, Romanian, Hungarian)
+  - Asian languages (Vietnamese, Indonesian, Malay)
+  - Middle Eastern (Turkish, Persian, Hebrew)
+- Total languages now: 80+ languages with neural voices
+
+**Parse Default Language in SSML** (v0.9.80, #2135):
+- Extract language from SSML tags when available
+- Better language detection for bilingual books
+- Improved voice matching for mixed-language content
+
+### TTS Audio Optimizations (v0.9.80-0.9.82)
+
+**Compensate Audio Fade-In** (v0.9.80, #2006):
+- Fixed audio fade-in issue when resuming playback on iOS/macOS
+- Eliminated "pop" sound at start of each sentence
+- Smoother audio transitions between sentences
+- Better handling of iOS audio session interruptions
+
+**Abortable Prefetch** (v0.9.80, #2110):
+- Prefetching of TTS audio can now be aborted if user changes page
+- Prevents wasted bandwidth and processing for unused audio
+- Better resource management
+- Fixes issue #2037 where prefetched audio continued even after user navigated away
+
+**Implementation**:
+```typescript
+class TTSController {
+  private prefetchAbortController: AbortController | null = null;
+
+  async prefetchNextSentences(count: number = 2) {
+    // Abort previous prefetch if still running
+    if (this.prefetchAbortController) {
+      this.prefetchAbortController.abort();
+    }
+
+    this.prefetchAbortController = new AbortController();
+    const signal = this.prefetchAbortController.signal;
+
+    for (let i = 1; i <= count; i++) {
+      if (signal.aborted) break;
+
+      const nextIndex = this.currentSentenceIndex + i;
+      if (nextIndex < this.sentences.length) {
+        await this.backend.prefetch(
+          this.sentences[nextIndex],
+          this.voice,
+          this.rate,
+          signal
+        );
+      }
+    }
+  }
+}
+```
+
+**Files**:
+- `src/app/reader/utils/tts/TTSController.ts` - Prefetch abort logic
+- `src/app/reader/utils/tts/EdgeTTSBackend.ts` - Backend prefetch support
+- `src/app/reader/utils/tts/iosAudioSession.ts` - iOS audio session handling
+
+---
+
+**Last Updated**: Documentation for commits through e1691661 (November 2025, v0.9.82)
 **Related Documents**: [translation-system](../translation-system/index.md), [annotation-system](../annotation-system/index.md), [cross-platform-support](../cross-platform-support/index.md)

@@ -1545,6 +1545,200 @@ const StorageQuota = () => {
 
 ---
 
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Metadata Hash Book Aggregation (v0.9.80, #2062, #2063)
+
+**Major Feature**: Use metadata hash to aggregate and sync progress across different editions/versions of the same book.
+
+**Problem**: Previously, each unique book file (different formats, editions, or sources) was treated as a separate book, even if they contained the same content. Users had separate reading positions for:
+- EPUB vs PDF versions of the same book
+- Different editions from different publishers
+- Books converted through Calibre with different metadata
+- Same book from different sources
+
+**Solution**: Introduced `meta_hash` - a content-based hash that identifies books by their actual content rather than file characteristics.
+
+**Implementation** (`src/utils/bookHash.ts`):
+```typescript
+// Generate metadata hash from book content
+const generateMetaHash = (book: BookMetadata): string => {
+  // Use normalized title, author, and content sample
+  const normalizedTitle = normalizeString(book.title);
+  const normalizedAuthor = normalizeString(book.authors?.join(' ') || '');
+
+  // Hash based on content, not file
+  return md5(`${normalizedTitle}:${normalizedAuthor}`);
+};
+
+// Normalize strings for consistent hashing
+const normalizeString = (str: string): string => {
+  return str
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ')     // Normalize whitespace
+    .trim();
+};
+```
+
+**Database Schema Update**:
+```sql
+-- Add meta_hash column to books table
+ALTER TABLE books ADD COLUMN meta_hash TEXT;
+
+-- Add index for efficient meta_hash queries
+CREATE INDEX idx_books_meta_hash ON books(user_id, meta_hash);
+
+-- Update book_configs to use meta_hash
+ALTER TABLE book_configs ADD COLUMN meta_hash TEXT;
+CREATE INDEX idx_configs_meta_hash ON book_configs(user_id, meta_hash);
+```
+
+**Progress Sync with Aggregation** (v0.9.80, #2062):
+
+**Overview**: Reading progress is now aggregated across all versions of the same book using `meta_hash`.
+
+**Sync Flow**:
+```typescript
+// When syncing progress
+const syncProgress = async (book: BookMetadata, position: Location) => {
+  const metaHash = generateMetaHash(book);
+
+  // Find all books with same meta_hash
+  const { data: relatedBooks } = await supabase
+    .from('books')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('meta_hash', metaHash);
+
+  // Sync progress to all related books
+  for (const relatedBook of relatedBooks) {
+    await supabase
+      .from('book_configs')
+      .upsert({
+        book_hash: relatedBook.book_hash,
+        meta_hash: metaHash,  // ← Key addition
+        progress: position.progress,
+        location: position.cfi,
+        updated_at: new Date().toISOString()
+      });
+  }
+};
+```
+
+**User Experience**:
+1. User reads EPUB version of book to 50%
+2. User switches to PDF version of same book
+3. PDF automatically opens at 50% (synced via meta_hash)
+4. User's notes and highlights from EPUB also appear in PDF
+5. Works across devices and formats seamlessly
+
+**KOReader Integration** (v0.9.80, #2063):
+
+**Overview**: Extended metadata hash to support cross-app synchronization with KOReader.
+
+**KOReader Compatibility**:
+- KOReader uses similar content-based hashing
+- Readest now compatible with KOReader's sync protocol
+- Users can switch between Readest and KOReader while maintaining progress
+
+**Implementation** (`src/services/kosync.ts`):
+```typescript
+// Extract meta_hash for KOReader compatibility
+const extractMetaHashForKOReader = (book: BookMetadata): string => {
+  // KOReader uses title + author for book identification
+  // Make extraction more robust for Calibre conversions and metadata edits
+
+  // Try multiple sources for title/author
+  const title =
+    book.title ||
+    book.metadata?.title ||
+    extractTitleFromFilename(book.filename);
+
+  const author =
+    book.authors?.join(' ') ||
+    book.metadata?.creator ||
+    'Unknown';
+
+  return generateMetaHash({ title, authors: [author] });
+};
+```
+
+**Robust Meta Hash Extraction** (v0.9.82, #2154):
+- More robust extraction for Calibre-converted books
+- Handles metadata edits without losing sync
+- Fallback to filename-based identification if metadata missing
+- Compatible with various ebook management tools
+
+**Benefits**:
+- Single reading position across all book versions
+- Consolidated annotations and highlights
+- Cross-app compatibility (KOReader, Calibre)
+- No manual book merging required
+- Automatic version detection and aggregation
+
+**Edge Cases Handled**:
+- Books with slightly different titles (e.g., "The Lord of the Rings" vs "Lord of the Rings")
+- Different author formats (e.g., "J.R.R. Tolkien" vs "Tolkien, J.R.R.")
+- Books with missing or incorrect metadata
+- Calibre conversions with modified metadata
+- Multiple file formats of same book
+
+**Files**:
+- `src/utils/bookHash.ts` - Meta hash generation
+- `src/services/kosync.ts` - KOReader integration
+- `src/hooks/useProgressSync.ts` - Progress sync with aggregation
+- Database migrations for `meta_hash` column
+
+### Sync Reliability Improvements (v0.9.80, #2041, #2112, #2115)
+
+**Resolve Invalid Token Issues** (v0.9.80, #2041):
+- Fixed issue where invalid/expired tokens were occasionally used with storage API
+- Better token validation before making API calls
+- Automatic token refresh when approaching expiration
+- Improved error handling and user notification
+
+**Implementation**:
+```typescript
+const ensureValidToken = async (): Promise<string> => {
+  const token = getStoredToken();
+
+  // Validate token before use
+  if (!token || isTokenExpired(token)) {
+    // Attempt to refresh
+    const newToken = await refreshAccessToken();
+
+    if (!newToken) {
+      // Force re-authentication
+      throw new AuthError('Session expired. Please log in again.');
+    }
+
+    return newToken;
+  }
+
+  return token;
+};
+```
+
+**Force Full Sync Periodically** (v0.9.80, #2112):
+- Automatic full sync after a certain period (7 days by default)
+- Prevents drift between local and remote data
+- Resolves inconsistencies from failed incremental syncs
+- Configurable sync interval
+
+**Handle Incomplete Config Data** (v0.9.80, #2115):
+- Gracefully handle incomplete or corrupted sync data
+- Validate incoming config data before applying
+- Fallback to local data if remote data is invalid
+- Better error reporting for debugging
+
+**Files**:
+- `src/utils/access.ts` - Token validation
+- `src/services/syncService.ts` - Full sync scheduling
+- `src/hooks/useSync.ts` - Config validation
+
+---
+
 ## Future Enhancements
 
 ### Planned Features
