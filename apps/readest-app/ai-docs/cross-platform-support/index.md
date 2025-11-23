@@ -933,3 +933,414 @@ async function downloadWithRangeAccess(
 
 ---
 
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Screen Reader Accessibility Support (v0.9.80, #2040, #2044, #2046, #2050, #2051, #2084)
+
+**Major Feature**: Comprehensive screen reader support across all platforms.
+
+**Overview**: Readest now provides full accessibility support for users who rely on screen readers, making the app usable for visually impaired users across iOS, macOS, Windows, Linux, and mobile platforms.
+
+**Supported Screen Readers**:
+- **iOS/iPadOS**: VoiceOver (#2040)
+- **macOS**: VoiceOver (#2040)
+- **Windows**: NVDA, JAWS, Narrator (#2050)
+- **Linux**: Orca (#2050)
+- **Android**: TalkBack (#2044)
+
+**VoiceOver Support** (v0.9.80, #2040):
+
+**Implementation**: Full integration with iOS and macOS VoiceOver.
+
+**Features**:
+- All interactive elements properly labeled
+- Logical reading order for book content
+- Custom VoiceOver hints for complex interactions
+- Support for rotor navigation
+- Proper heading levels for TOC navigation
+
+**Example** (`src/components/BookCard.tsx`):
+```typescript
+<div
+  role="article"
+  aria-label={`${book.title} by ${book.authors?.join(', ')}`}
+  aria-describedby={`book-description-${book.id}`}
+>
+  <img
+    src={book.coverUrl}
+    alt={`Cover of ${book.title}`}
+    role="img"
+  />
+
+  <div id={`book-description-${book.id}`}>
+    <h3>{book.title}</h3>
+    <p aria-label="Authors">{book.authors?.join(', ')}</p>
+    <p aria-label="Progress">
+      {Math.round(book.progress * 100)}% complete
+    </p>
+  </div>
+
+  <button
+    aria-label={`Open ${book.title}`}
+    onClick={() => openBook(book)}
+  >
+    Open
+  </button>
+</div>
+```
+
+**Mobile Accessibility** (v0.9.80, #2044):
+
+**Platform-Specific Enhancements**:
+
+**iOS**:
+- VoiceOver navigation for all UI elements
+- Custom actions for book cards (Open, Delete, Details)
+- Proper focus management in modals
+- Accessibility labels for icon-only buttons
+
+**Android**:
+- TalkBack support for all screens
+- Content descriptions for images
+- Proper heading structure
+- Touch exploration support
+
+**Implementation** (`src/app/reader/components/ReaderHeader.tsx`):
+```typescript
+<header
+  role="banner"
+  aria-label="Reader header"
+>
+  <button
+    aria-label="Back to library"
+    aria-describedby="back-button-hint"
+    onClick={goBack}
+  >
+    <BackIcon aria-hidden="true" />
+  </button>
+  <span id="back-button-hint" className="sr-only">
+    Returns to the library page
+  </span>
+
+  <h1 aria-live="polite">
+    {currentBook.title}
+  </h1>
+
+  <nav aria-label="Reader actions">
+    {/* Action buttons with proper labels */}
+  </nav>
+</header>
+```
+
+**Desktop Screen Readers** (v0.9.80, #2050):
+
+**NVDA Support (Windows)**:
+- Full keyboard navigation
+- Proper ARIA landmarks
+- Form field labels and descriptions
+- Live region announcements for dynamic content
+
+**Orca Support (Linux)**:
+- GTK accessibility integration
+- Keyboard shortcuts documented
+- Proper widget roles
+- Focus indicator visibility
+
+**Implementation Notes**:
+- Uses ARIA live regions for dynamic updates
+- Proper heading hierarchy (h1 → h6)
+- Skip links for main content
+- Focus trap in modals and dialogs
+
+**Keyboard Navigation** (v0.9.80, #2046):
+
+**Focus Ring Visibility**:
+- Only show focus ring for keyboard navigation
+- Hidden for mouse/touch interactions
+- High contrast focus indicators
+- Visible on all interactive elements
+
+**CSS Implementation**:
+```css
+/* Show focus ring only for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Hide outline for mouse clicks */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :focus-visible {
+    outline-width: 3px;
+    outline-color: currentColor;
+  }
+}
+```
+
+**JavaScript Detection**:
+```typescript
+// Detect keyboard navigation
+let isUsingKeyboard = false;
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    isUsingKeyboard = true;
+    document.body.classList.add('using-keyboard');
+  }
+});
+
+window.addEventListener('mousedown', () => {
+  isUsingKeyboard = false;
+  document.body.classList.remove('using-keyboard');
+});
+```
+
+**Contrast Improvements** (v0.9.80, #2084):
+
+**Better Contrast for Disabled Buttons**:
+- Improved color contrast ratios
+- WCAG AAA compliance for text
+- Minimum 3:1 contrast for UI components
+- Support for high contrast mode
+
+**Before/After**:
+| Element | Before | After | Ratio |
+|---------|--------|-------|-------|
+| Disabled button text | #999 on #eee | #666 on #f5f5f5 | 4.5:1 |
+| Secondary text | #aaa on #fff | #767676 on #fff | 4.54:1 |
+| Border colors | #ddd | #999 | 3.9:1 |
+
+**Documentation** (v0.9.80, #2051):
+
+**README Update**: Added comprehensive accessibility section documenting:
+- Supported screen readers by platform
+- Keyboard shortcuts for accessibility
+- How to report accessibility issues
+- Compliance with WCAG 2.1 Level AA
+
+**Files**:
+- `src/styles/accessibility.css` - Accessibility-specific styles
+- `src/hooks/useKeyboardNavigation.ts` - Keyboard navigation hook
+- `src/utils/accessibility.ts` - ARIA utilities
+- Platform-specific accessibility implementations in each platform doc
+
+**Testing**:
+- Tested with VoiceOver on iOS 16+ and macOS 13+
+- Tested with NVDA 2023+ on Windows
+- Tested with Orca on Ubuntu 22.04+
+- Tested with TalkBack on Android 11+
+
+### Portable Data Location (v0.9.80, #2125, #2126, #2131, #2142)
+
+**Major Feature**: Users can now change the data storage location for Readest, enabling portable installations and custom storage paths.
+
+**Desktop Platforms** (v0.9.80, #2125):
+
+**Overview**: Change where Readest stores books, settings, and data on desktop platforms.
+
+**Use Cases**:
+- Store data on external drive for portability
+- Use network drive for shared library
+- Separate data from app installation
+- Backup and sync to cloud storage
+
+**Implementation** (`src-tauri/src/commands/data_location.rs`):
+```rust
+#[tauri::command]
+async fn change_data_location(new_path: String) -> Result<(), String> {
+    // Validate path
+    let path = PathBuf::from(&new_path);
+    if !path.exists() {
+        return Err("Path does not exist".to_string());
+    }
+
+    // Create Readest directory structure
+    create_data_dirs(&path)?;
+
+    // Copy existing data to new location
+    migrate_data(get_current_data_dir(), &path).await?;
+
+    // Update config to point to new location
+    set_data_location(&new_path)?;
+
+    Ok(())
+}
+```
+
+**UI** (`src/components/Settings/DataLocationSettings.tsx`):
+```typescript
+const DataLocationSettings = () => {
+  const [currentLocation, setCurrentLocation] = useState('');
+  const [isChanging, setIsChanging] = useState(false);
+
+  const handleChangeLocation = async () => {
+    const newPath = await invoke('select_directory_dialog');
+
+    if (newPath) {
+      setIsChanging(true);
+      try {
+        await invoke('change_data_location', { newPath });
+        setCurrentLocation(newPath);
+        toast.success('Data location changed successfully');
+      } catch (error) {
+        toast.error('Failed to change data location: ' + error);
+      } finally {
+        setIsChanging(false);
+      }
+    }
+  };
+
+  return (
+    <div className="data-location-settings">
+      <h3>Data Storage Location</h3>
+      <p>Current: {currentLocation}</p>
+      <button onClick={handleChangeLocation} disabled={isChanging}>
+        {isChanging ? 'Changing...' : 'Change Location'}
+      </button>
+    </div>
+  );
+};
+```
+
+**Portable Windows Binaries** (v0.9.80, #2126):
+
+**Overview**: Windows portable builds keep all data within the executable directory.
+
+**Directory Structure**:
+```
+readest-portable/
+├── readest.exe
+├── data/              ← App data stored here
+│   ├── books/
+│   ├── fonts/
+│   ├── settings.json
+│   └── library.db
+└── resources/
+```
+
+**Detection**:
+```rust
+fn get_data_dir() -> PathBuf {
+    // Check for portable.txt marker file
+    let exe_dir = env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    let portable_marker = exe_dir.join("portable.txt");
+
+    if portable_marker.exists() {
+        // Portable mode: use exe directory
+        exe_dir.join("data")
+    } else {
+        // Normal mode: use AppData
+        dirs::data_dir()
+            .unwrap()
+            .join("Readest")
+    }
+}
+```
+
+**Benefits**:
+- No installation required
+- All data in one folder
+- Easy to backup/move
+- No registry changes
+- Multiple instances possible (different folders)
+
+**Android Data Location** (v0.9.80, #2131):
+
+**Overview**: Change data storage location on Android, including SD card support.
+
+**Options**:
+1. **Internal Storage** (default): `/data/data/com.readest.app/files`
+2. **App-specific External**: `/sdcard/Android/data/com.readest.app/files`
+3. **Public External**: `/sdcard/Readest` (requires permission)
+
+**Implementation** (`src-tauri/android/src/MainActivity.kt`):
+```kotlin
+@Command
+fun changeDataLocation(path: String): Result<Unit> {
+    val newDir = File(path)
+
+    // Check if SD card path
+    if (path.startsWith("/storage/")) {
+        // Request MANAGE_EXTERNAL_STORAGE permission
+        if (!hasManageStoragePermission()) {
+            requestManageStoragePermission()
+            return Result.failure(Exception("Permission required"))
+        }
+    }
+
+    // Migrate existing data
+    migrateData(getDataDir(), newDir)
+
+    // Update preference
+    sharedPrefs.edit()
+        .putString("data_location", path)
+        .apply()
+
+    return Result.success(Unit)
+}
+```
+
+**SD Card Permission** (v0.9.80, #2142):
+
+**Overview**: Request `MANAGE_EXTERNAL_STORAGE` permission when user wants to use SD card root.
+
+**Permission Flow**:
+1. User selects SD card location
+2. App checks if permission granted
+3. If not, show permission rationale
+4. Request permission via Settings intent
+5. User grants permission in Settings
+6. App migrates data to SD card
+
+**UI**:
+```typescript
+const SDCardPermissionDialog = ({ onGrant, onDeny }) => {
+  const requestPermission = async () => {
+    const granted = await invoke('request_manage_storage_permission');
+
+    if (granted) {
+      onGrant();
+    } else {
+      toast.error('Permission denied. Cannot use SD card location.');
+      onDeny();
+    }
+  };
+
+  return (
+    <Dialog>
+      <h2>SD Card Permission Required</h2>
+      <p>
+        To store data on the SD card, Readest needs permission
+        to manage all files. This permission allows the app to
+        read and write files anywhere on your device.
+      </p>
+      <button onClick={requestPermission}>Grant Permission</button>
+      <button onClick={onDeny}>Cancel</button>
+    </Dialog>
+  );
+};
+```
+
+**Files**:
+- `src-tauri/src/commands/data_location.rs` - Data location commands
+- `src-tauri/android/src/MainActivity.kt` - Android storage APIs
+- `src/components/Settings/DataLocationSettings.tsx` - Settings UI
+- `src/services/dataLocation.ts` - Data migration utilities
+
+**Related**: See platform-specific docs for more details:
+- [Windows](./windows.md) - Portable binaries
+- [Android](./android.md) - Storage options and permissions
+
+---
+

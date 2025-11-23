@@ -1316,7 +1316,137 @@ None - all changes are backward compatible
 
 ---
 
-**Version**: Documentation for commits `571baf98` through `cc3cc58d` (v0.9.64 → v0.9.78)
+## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
+
+### Major Features Added (November 2025)
+
+1. **Screen Reader Accessibility Support** (v0.9.80, #2040, #2044, #2050)
+   - VoiceOver support on iOS and macOS (#2040)
+   - Accessibility for mobile platforms (#2044)
+   - NVDA screen reader support on Windows and Orca on Linux (#2050)
+   - Focus ring for keyboard navigation (#2046)
+   - Better contrast for disabled buttons (#2084)
+   - **See**: Cross-platform accessibility improvements across all platforms
+
+2. **Portable Data Location** (v0.9.80, #2125, #2126, #2131)
+   - Change data location on desktop platforms (#2125)
+   - Portable Windows binaries with app data in executable directory (#2126)
+   - Change data location on Android (#2131)
+   - Request manage external storage permission for SD card on Android (#2142)
+   - **See**: [cross-platform-support/](./cross-platform-support/) platform-specific docs
+
+3. **Background TTS with Media Session** (v0.9.80, #2071, #2138)
+   - Media session support in desktop apps (#2071)
+   - Background TTS with media session controls (#2138)
+   - Control playback from system media controls
+   - **See**: [text-to-speech/index.md](./text-to-speech/index.md)
+
+4. **Enhanced Sync with Metadata Hash** (v0.9.80, #2062, #2063)
+   - Aggregate books with metadata hash for progress sync (#2062)
+   - kosync uses metadata hash to aggregate different book versions (#2063)
+   - Sync different editions of the same book
+   - **See**: [auth-sync/index.md](./auth-sync/index.md)
+
+5. **Library List View Improvements** (v0.9.80, #2009)
+   - Show groups in list mode in the library page
+   - Enhanced library organization
+   - **See**: [library-management/bookshelf.md](./library-management/bookshelf.md)
+
+6. **Variable Fonts Support** (v0.9.80, #2007)
+   - Import and use variable fonts (TTF/OTF with multiple weights)
+   - Better typography options
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+7. **Fixed Layout Enhancements** (v0.9.80, #1995)
+   - Swipe to paginate on fixed layout books
+   - Better support for graphic novels and manga
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+8. **Global Settings Access** (v0.9.82, #2151)
+   - Access global settings from library menu
+   - Improved settings navigation
+   - **See**: [settings-system/index.md](./settings-system/index.md)
+
+### Enhancements (0.9.79 - 0.9.82 Period)
+
+- **Layout & Zoom**:
+  - Fixed zoom level handling on iOS and macOS (#1978)
+  - Prevent layout shift on Android browsers (#1980)
+  - Restore scale factor (zoom level) for PDFs (#1989)
+  - Adjust font size instead of zooming HTML (#2101)
+  - Apply zoom shortcuts to PDFs (#2016)
+  - Disable swipe up to toggle action bar when PDF zoomed in (#2068)
+
+- **Fonts**:
+  - Correctly parse woff/woff2 font filenames on Android (#1990)
+  - Higher priority for CJK fonts to override system glyphs (#2093)
+  - Custom fonts panel with variable font support (#2007)
+
+- **Window Management**:
+  - Transparent background for rounded window on Linux (#1991, #1998, #2001)
+  - Support dragging window on touch screen (#2025, #2116)
+  - Fixed double-click detection on header bar on Windows (#2026)
+
+- **TTS**:
+  - Compensate audio fade-in for resumed play on iOS/macOS (#2006)
+  - More languages for Edge TTS (#2089)
+  - Handle 'und' (undefined) language code (#2102)
+  - Abortable prefetch of TTS data (#2110)
+  - Parse default language in SSML without translated text (#2135)
+
+- **Sync**:
+  - Resolve invalid token issues with storage API (#2041)
+  - Force full sync after a certain period (#2112)
+  - Handle incomplete config data from sync sources (#2115)
+
+- **RTL Support**:
+  - Pagination with volume keys in right direction for RTL books (#2004)
+
+- **Metadata**:
+  - Option to remove cover image (#2028)
+  - Handle invalid language codes and titles when importing (#2064)
+
+- **UI/UX**:
+  - Add support links in About window (#2024)
+  - Delete confirmation for book deletion from context menu (#2029)
+  - Fix break-word for titles in book detail (#2043)
+  - Scrollable book view and about window (#2098)
+  - Scroll in dropdown menu in landscape mode (#2076)
+
+- **Compatibility**:
+  - Support WebView down to version 92 (#2145)
+  - Normalize OKLCH color syntax for older iOS Safari (#2150)
+  - Better handling of environment-specific features
+
+- **Reader Settings**:
+  - Avoid pagination until book view is initialized (#1994)
+  - Jump to current item in virtualized TOC list (#2066)
+  - Scroll fixes for various UI elements (#2076, #2098)
+
+- **CSS & Styling**:
+  - Default to lower font-family specificity than ebook styles (#2081)
+  - Better CSS override handling for book content
+  - Hard-coded font weight override (#2113)
+
+- **Themes**:
+  - Mono theme support (#2153)
+
+- **Localization**:
+  - i18n for notification title and text (#2143)
+  - Apply system language on app start (#2144)
+
+- **Build & Infrastructure**:
+  - Support custom root directory for Readest file system (#2092)
+  - Bumped Tauri to latest version (#2117)
+  - Dependency updates and security patches
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**Version**: Documentation for commits `571baf98` through `e1691661` (v0.9.64 → v0.9.82)
 **Last Updated**: November 2025
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `cc3cc58d` for context on the codebase state at this point.**
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `e1691661` for context on the codebase state at this point.**
