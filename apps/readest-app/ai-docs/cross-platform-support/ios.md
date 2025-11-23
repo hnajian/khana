@@ -1204,6 +1204,63 @@ useEffect(() => {
 
 ---
 
+## Version 0.9.83 - 0.9.90 Updates (e1691661 → dd5371d2)
+
+### WebContent Process Termination Recovery (v0.9.89, #2302)
+
+**Feature**: Detect and automatically recover from WebContent process termination on iOS.
+
+**Problem**: iOS can terminate background WebView processes to free memory, causing the reader to freeze or crash.
+
+**Solution**: Detect process termination and automatically reload the current book at the last reading position.
+
+**Implementation** (`src-tauri/src/ios/webview_recovery.swift`):
+```swift
+class WebViewRecoveryHandler: NSObject, WKNavigationDelegate {
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        NSLog("WebContent process terminated, attempting recovery...")
+
+        // Save current state before reload
+        saveCurrentReadingPosition()
+
+        // Reload the web view
+        webView.reload()
+
+        // Restore reading position after reload completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.restoreLastReadingPosition()
+        }
+    }
+}
+```
+
+**Benefits**:
+- Seamless recovery from process termination
+- No data loss
+- Continues reading from exact position
+- Better long-reading session stability
+
+**Files**:
+- `src-tauri/src/ios/webview_recovery.swift` - Recovery handler
+- `src/app/reader/hooks/useWebViewRecovery.ts` - React hook for state restoration
+
+### Restore Last Page on App Termination (v0.9.89, #2312)
+
+**Feature**: Restore last reading page if app is terminated in background by iOS.
+
+**Overview**: iOS may terminate apps in the background for memory management. This feature ensures reading position is preserved.
+
+**Implementation**:
+- Periodic autosave of reading position (every 30 seconds)
+- Save on app background event
+- Restore on app foreground/launch
+
+**Files**:
+- `src-tauri/src/ios/state_preservation.swift` - State saving/restoration
+- `src/app/reader/hooks/useAutoSave.ts` - Autosave logic
+
+---
+
 ## Related Documentation
 
 - **[Cross-Platform Support Index](./index.md)** - Overview of all platforms
@@ -1212,5 +1269,5 @@ useEffect(() => {
 
 ---
 
-**Last Updated**: Documentation for commit f4908c45 (February 2025)
-**Related Commits**: #410, #411, #428, #433, #443, #447, #502, #505, #547, #822
+**Last Updated**: Documentation for commit dd5371d2 (November 2025, v0.9.90)
+**Related Commits**: #410, #411, #428, #433, #443, #447, #502, #505, #547, #822, #2302, #2312
