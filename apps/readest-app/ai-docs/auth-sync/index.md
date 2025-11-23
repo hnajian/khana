@@ -660,6 +660,142 @@ CREATE INDEX idx_notes_updated ON book_notes(updated_at);
 - Use pagination for large libraries
 - Filter deleted records early (`WHERE deleted_at IS NULL`)
 
+## Updates (v0.9.32-0.9.43)
+
+### Cloud Backup Status Indicators (v0.9.42, #1173, #1167)
+
+**Overview**: Visual indicators showing cloud backup/sync status for each book on both mobile and desktop platforms.
+
+**Features**:
+- Status badge on book covers in library
+- Real-time sync status updates
+- Visual distinction between synced, syncing, and not synced states
+- Works on both mobile and desktop
+
+**Status States**:
+1. **Synced** (✓ icon, green): Book and progress fully synced
+2. **Syncing** (↻ icon, blue): Sync in progress
+3. **Not Synced** (× icon, gray): Book not backed up to cloud
+4. **Error** (! icon, red): Sync failed, requires attention
+
+**Implementation** (`src/app/library/components/BookCard.tsx`):
+```typescript
+const CloudStatus = ({ bookHash }: { bookHash: string }) => {
+  const syncStatus = useCloudSync(state => state.bookStatus[bookHash]);
+
+  const icons = {
+    synced: <FaCheckCircle className="text-green-500" />,
+    syncing: <FaSyncAlt className="text-blue-500 animate-spin" />,
+    not_synced: <FaTimesCircle className="text-gray-400" />,
+    error: <FaExclamationCircle className="text-red-500" />
+  };
+
+  return (
+    <div className="cloud-status-badge">
+      {icons[syncStatus || 'not_synced']}
+    </div>
+  );
+};
+```
+
+**Tooltip Information**:
+- Hover shows last sync time
+- Click opens sync details dialog
+- Shows specific error messages when applicable
+
+### Sign in with Apple on macOS (v0.9.32-0.9.33, #856, #866)
+
+**Native Sign in with Apple** (v0.9.32, #856):
+- Implemented native Sign in with Apple support on macOS
+- Uses Apple's native authentication framework
+- Seamless integration with macOS Keychain
+- Better security and user experience
+
+**OAuth Flow Improvement** (v0.9.33, #866):
+- Refactored OAuth flow to use ASWebAuthenticationSession on macOS
+- More reliable authentication process
+- Better handling of OAuth callbacks
+- Improved error handling
+
+**Implementation** (`src/services/auth/apple.ts`):
+```typescript
+// macOS-specific Sign in with Apple
+const signInWithApple = async () => {
+  if (platform === 'macos') {
+    // Use native ASWebAuthenticationSession
+    const session = await invoke('apple_sign_in');
+    return session;
+  } else {
+    // Fallback to web OAuth flow
+    return supabase.auth.signInWithOAuth({
+      provider: 'apple'
+    });
+  }
+};
+```
+
+**Benefits**:
+- Native macOS integration
+- Automatic credential filling from Keychain
+- Face ID/Touch ID support for re-authentication
+- Follows Apple Human Interface Guidelines
+
+### Books Without Covers Sync Support (v0.9.33, #878)
+
+**Issue**: Books without cover images failed to sync across devices.
+
+**Fix**: Implemented proper handling for books missing cover metadata:
+```typescript
+// Handle books without covers
+const syncBook = async (book: BookMetadata) => {
+  const bookData = {
+    ...book,
+    coverImageUrl: book.coverImageUrl || null,  // Allow null covers
+    hasCover: !!book.coverImageUrl              // Track cover availability
+  };
+
+  await supabase
+    .from('books')
+    .upsert(bookData);
+};
+```
+
+**Improvements**:
+- Books sync successfully without covers
+- Placeholder covers shown in UI
+- Cover can be added later without re-sync
+- Sync progress not blocked by missing covers
+
+### Avatar Caching (v0.9.41, #1140)
+
+**Feature**: Cache user avatar images for offline usage.
+
+**Implementation**:
+```typescript
+// Cache avatar on login
+const cacheAvatar = async (avatarUrl: string) => {
+  const response = await fetch(avatarUrl);
+  const blob = await response.blob();
+
+  // Store in IndexedDB
+  await avatarCache.set(userId, blob);
+};
+
+// Use cached avatar when offline
+const getAvatar = async (userId: string) => {
+  if (!navigator.onLine) {
+    return await avatarCache.get(userId);
+  }
+  return avatarUrl;
+};
+```
+
+**Benefits**:
+- Avatar available offline
+- Faster loading from cache
+- Reduced network requests
+- Better offline experience
+
 ## Future Enhancements
 
 ### Planned Features
@@ -682,5 +818,5 @@ CREATE INDEX idx_notes_updated ON book_notes(updated_at);
 
 ---
 
-**Last Updated:** Documentation for commits up to d757555f
+**Last Updated:** Documentation for commits up to def157ca (November 2025)
 **Related Documents:** [feature-cross-platform-support.md](./feature-cross-platform-support.md), [feature-library-management.md](./feature-library-management.md)
