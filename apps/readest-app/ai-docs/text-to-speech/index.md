@@ -866,5 +866,186 @@ interface ViewState {
 
 ---
 
-**Last Updated**: Documentation for commits through f5b686ab (November 2025, v0.9.63)
+## Version 0.9.64 - 0.9.67 Updates (f5b686ab → 33b2ba16)
+
+### Handle Invalid Language Codes (v0.9.65, #1607)
+
+**Enhancement**: Improved handling of invalid or unsupported language codes for TTS.
+
+**Problem**: Books with invalid language codes would cause TTS to fail silently or show confusing errors.
+
+**Solution**:
+
+1. **Language Code Validation**: Check if language code is supported before TTS initialization
+   ```typescript
+   const isLanguageSupported = (lang: string): boolean => {
+     const normalizedLang = normalizeLanguageCode(lang);
+     const availableVoices = speechSynthesis.getVoices();
+     return availableVoices.some(voice => voice.lang.startsWith(normalizedLang));
+   };
+   ```
+
+2. **No Voices Hint**: Display helpful message when no voices are available
+   ```typescript
+   if (availableVoices.length === 0) {
+     toast.warning('No TTS voices available for this language. Try changing the book language in settings.');
+     showVoiceInstallationGuide();
+   }
+   ```
+
+3. **Fallback Handling**:
+   - Attempt to use closest language match
+   - Default to system default voice if no match
+   - Show language mismatch warning to user
+
+**User Experience**:
+- Clear error messages explaining the issue
+- Suggested actions (install voice pack, change language)
+- Link to system TTS settings
+
+**Files**:
+- `src/app/reader/utils/tts/TTSController.ts` - Language validation
+- `src/components/Toast.tsx` - User notifications
+- `src/utils/language.ts` - Language normalization
+
+### Skip TTS for Rubys and Footnote Anchors (v0.9.65, #1608)
+
+**Enhancement**: Improved TTS reading quality by skipping ruby annotations and footnote anchor text.
+
+**Background**:
+- **Ruby annotations**: Used in CJK texts to show pronunciation (e.g., furigana in Japanese)
+- **Footnote anchors**: Superscript numbers/symbols linking to footnotes
+
+**Problem**: TTS would read both the base text and ruby text, causing:
+- Duplicated pronunciation in Japanese books
+- Confusing number reading for footnotes (e.g., "Chapter One1")
+
+**Solution**:
+
+```typescript
+const shouldSkipElement = (element: Element): boolean => {
+  const tagName = element.tagName.toLowerCase();
+
+  // Skip ruby annotations
+  if (tagName === 'ruby' || tagName === 'rt' || tagName === 'rp') {
+    return true;
+  }
+
+  // Skip footnote anchors
+  if (
+    tagName === 'a' &&
+    (element.getAttribute('epub:type') === 'noteref' ||
+     element.classList.contains('footnote-ref'))
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+// Extract text for TTS
+const extractTextForTTS = (container: HTMLElement): string => {
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node) => {
+        const parent = node.parentElement;
+        return shouldSkipElement(parent)
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT;
+      }
+    }
+  );
+
+  let text = '';
+  let node;
+  while (node = walker.nextNode()) {
+    text += node.textContent;
+  }
+
+  return text;
+};
+```
+
+**Benefits**:
+- Cleaner TTS output for CJK books
+- No interruption from footnote markers
+- Better listening experience
+
+**Related Issue**: #1334 (original request)
+
+**Files**:
+- `src/app/reader/utils/tts/textExtractor.ts` - Text extraction logic
+- `src/app/reader/utils/tts/TTSController.ts` - TTS controller
+
+### Convert ISO 639-2 to ISO 639-1 for Voice Filtering (v0.9.66, #1639)
+
+**Enhancement**: Improved TTS voice matching by converting 3-letter ISO 639-2 language codes to 2-letter ISO 639-1 codes.
+
+**Background**:
+- Book metadata often uses ISO 639-2 (3-letter codes): `eng`, `jpn`, `fra`
+- TTS voices use ISO 639-1 (2-letter codes): `en`, `ja`, `fr`
+- Mismatch prevented proper voice filtering
+
+**Problem**: Books with ISO 639-2 language codes would not find matching TTS voices.
+
+**Solution**:
+
+```typescript
+// Language code conversion map
+const ISO_639_2_TO_639_1: Record<string, string> = {
+  'eng': 'en',
+  'jpn': 'ja',
+  'fra': 'fr',
+  'deu': 'de',
+  'spa': 'es',
+  'ita': 'it',
+  'por': 'pt',
+  'rus': 'ru',
+  'zho': 'zh',
+  'ara': 'ar',
+  // ...complete mapping
+};
+
+const normalizeLanguageCode = (code: string): string => {
+  const lower = code.toLowerCase();
+
+  // Already ISO 639-1 (2 letters)
+  if (lower.length === 2) {
+    return lower;
+  }
+
+  // Convert ISO 639-2 to ISO 639-1 (3 letters -> 2 letters)
+  if (lower.length === 3) {
+    return ISO_639_2_TO_639_1[lower] || lower.slice(0, 2);
+  }
+
+  // Handle extended codes (e.g., 'en-US' -> 'en')
+  return lower.split('-')[0] || lower;
+};
+
+// Filter voices by book language
+const getVoicesForLanguage = (bookLanguage: string): SpeechSynthesisVoice[] => {
+  const normalizedLang = normalizeLanguageCode(bookLanguage);
+  const voices = speechSynthesis.getVoices();
+
+  return voices.filter(voice =>
+    voice.lang.toLowerCase().startsWith(normalizedLang)
+  );
+};
+```
+
+**Testing**: Verified with books using ISO 639-2 codes in metadata.
+
+**Related**: Also documented in [text-to-speech/language-normalization.md](./language-normalization.md)
+
+**Files**:
+- `src/utils/language.ts` - Language code conversion
+- `src/app/reader/utils/tts/voiceManager.ts` - Voice filtering
+- `src/app/reader/utils/tts/TTSController.ts` - Voice selection
+
+---
+
+**Last Updated**: Documentation for commits through 33b2ba16 (November 2025, v0.9.67)
 **Related Documents**: [translation-system](../translation-system/index.md), [annotation-system](../annotation-system/index.md), [cross-platform-support](../cross-platform-support/index.md)

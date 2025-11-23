@@ -583,6 +583,313 @@ const handleDelete = async (hashes: string[]) => {
 
 ---
 
+## Version 0.9.64 - 0.9.67 Updates (f5b686ab → 33b2ba16)
+
+### Book Metadata Editor (v0.9.64, #1583)
+
+**Major Feature**: Edit book metadata directly from the library interface.
+
+**Overview**: Users can now modify book title, author, publisher, language, and other metadata fields without re-importing books.
+
+**UI Access**:
+- Book context menu > "Edit Metadata"
+- Book details modal > "Edit" button
+- Keyboard shortcut: `E` when book selected
+
+**Editable Fields**:
+- Title
+- Author
+- Publisher
+- Publication date
+- Language
+- ISBN
+- Description/Summary
+- Tags
+- Custom fields
+
+**Implementation** (`src/app/library/components/MetadataEditor.tsx`):
+```typescript
+interface MetadataEditorProps {
+  book: BookMetadata;
+  onSave: (updates: Partial<BookMetadata>) => Promise<void>;
+  onCancel: () => void;
+}
+
+const MetadataEditor: React.FC<MetadataEditorProps> = ({ book, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    title: book.title,
+    author: book.author,
+    publisher: book.publisher,
+    language: book.language,
+    // ...other fields
+  });
+
+  const handleSave = async () => {
+    await onSave(formData);
+    toast.success('Metadata updated successfully');
+  };
+
+  return (
+    <Dialog>
+      <Input label="Title" value={formData.title} onChange={...} />
+      <Input label="Author" value={formData.author} onChange={...} />
+      {/* ...other inputs */}
+      <Button onClick={handleSave}>Save</Button>
+      <Button onClick={onCancel}>Cancel</Button>
+    </Dialog>
+  );
+};
+```
+
+**Validation**:
+- Required fields: Title, Author
+- Language code validation
+- Date format validation
+- ISBN format validation
+
+**Files**:
+- `src/app/library/components/MetadataEditor.tsx` - Editor UI component
+- `src/store/libraryStore.ts` - Update metadata action
+- `src/services/appService.ts` - Persist metadata changes
+
+### Custom Cover Image Upload (v0.9.64, #1588)
+
+**Feature**: Upload custom cover images for books.
+
+**UI**: Metadata editor > Cover image section > "Upload Custom Cover"
+
+**Supported Formats**:
+- JPEG (.jpg, .jpeg)
+- PNG (.png)
+- WebP (.webp)
+- Maximum size: 5MB
+
+**Implementation** (`src/app/library/components/CoverUploader.tsx`):
+```typescript
+const CoverUploader = ({ book, onCoverUpdate }) => {
+  const handleFileSelect = async (file: File) => {
+    // Validate file
+    if (!ALLOWED_FORMATS.includes(file.type)) {
+      toast.error('Invalid format. Use JPEG, PNG, or WebP');
+      return;
+    }
+
+    if (file.size > MAX_SIZE) {
+      toast.error('File too large. Maximum size is 5MB');
+      return;
+    }
+
+    // Process image
+    const resized = await resizeImage(file, { maxWidth: 800, maxHeight: 1200 });
+    const url = URL.createObjectURL(resized);
+
+    // Save to app storage
+    await appService.saveCoverImage(book.hash, resized);
+
+    // Update metadata
+    onCoverUpdate(url);
+  };
+
+  return (
+    <div className="cover-uploader">
+      <img src={book.coverImageUrl} alt={book.title} />
+      <input type="file" accept="image/*" onChange={handleFileSelect} />
+      <button>Upload Custom Cover</button>
+    </div>
+  );
+};
+```
+
+**Features**:
+- Automatic image resizing for optimal storage
+- Preview before saving
+- Revert to original cover option
+- Custom covers saved in apps (#1588)
+
+**Storage**:
+- Custom covers stored separately from extracted covers
+- Indexed by book hash
+- Synced to cloud if user is signed in
+
+**Files**:
+- `src/app/library/components/CoverUploader.tsx`
+- `src/services/appService.ts` - Cover image persistence
+- `src/utils/image.ts` - Image resizing utilities
+
+### Metadata Sync Across Devices (v0.9.65, #1611)
+
+**Feature**: Sync book metadata changes across all user devices.
+
+**Overview**: When a user edits book metadata on one device, changes are automatically synced to all their other devices.
+
+**Sync Scope**:
+- Book metadata (title, author, etc.)
+- Custom cover images
+- User-added fields
+- Tags and categories
+
+**Implementation** (`src/services/syncService.ts`):
+```typescript
+const syncMetadata = async (bookHash: string, updates: Partial<BookMetadata>) => {
+  // Update local store
+  libraryStore.updateBook(bookHash, updates);
+
+  // Sync to cloud
+  if (isAuthenticated()) {
+    await supabase
+      .from('book_metadata')
+      .upsert({
+        user_id: userId,
+        book_hash: bookHash,
+        metadata: updates,
+        updated_at: new Date().toISOString()
+      });
+  }
+};
+
+// Listen for remote metadata changes
+const subscribeToMetadataChanges = () => {
+  supabase
+    .channel('metadata-changes')
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'book_metadata',
+      filter: `user_id=eq.${userId}`
+    }, (payload) => {
+      const { book_hash, metadata } = payload.new;
+      libraryStore.updateBook(book_hash, metadata);
+      toast.info(`Metadata updated for "${metadata.title}"`);
+    })
+    .subscribe();
+};
+```
+
+**Conflict Resolution**:
+- Last-write-wins strategy
+- Timestamp-based conflict resolution
+- Local changes take precedence if offline
+
+**Files**:
+- `src/services/syncService.ts` - Sync logic
+- `src/store/libraryStore.ts` - Local state updates
+- `src/services/supabase.ts` - Database operations
+
+### Search in Book Format and Group Names (v0.9.67, #1662)
+
+**Feature**: Enhanced library search with format and group filtering.
+
+**Search Capabilities**:
+1. **Book Format**: Filter by EPUB, PDF, MOBI, CBZ, FB2, TXT
+2. **Group Names**: Search in custom group/collection names
+3. **Group Descriptions**: Search in group description text
+4. **Combined Search**: Search across multiple fields simultaneously
+
+**UI Implementation** (`src/app/library/components/LibrarySearch.tsx`):
+```typescript
+const LibrarySearch = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formatFilter, setFormatFilter] = useState<BookFormat | 'all'>('all');
+
+  const filteredBooks = useLibraryStore(state => {
+    let books = state.library;
+
+    // Filter by format
+    if (formatFilter !== 'all') {
+      books = books.filter(b => b.format === formatFilter);
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      books = books.filter(b =>
+        b.title.toLowerCase().includes(query) ||
+        b.author.toLowerCase().includes(query) ||
+        b.format.toLowerCase().includes(query) ||
+        state.groups
+          .filter(g => g.bookHashes.includes(b.hash))
+          .some(g =>
+            g.name.toLowerCase().includes(query) ||
+            g.description?.toLowerCase().includes(query)
+          )
+      );
+    }
+
+    return books;
+  });
+
+  return (
+    <div className="library-search">
+      <input
+        type="text"
+        placeholder="Search books, formats, or groups..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+      <select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)}>
+        <option value="all">All Formats</option>
+        <option value="EPUB">EPUB</option>
+        <option value="PDF">PDF</option>
+        <option value="MOBI">MOBI</option>
+        <option value="CBZ">CBZ</option>
+        <option value="FB2">FB2/FBZ</option>
+        <option value="TXT">TXT</option>
+      </select>
+    </div>
+  );
+};
+```
+
+**Search Examples**:
+- `"epub"` - Shows all EPUB books
+- `"fantasy"` - Shows books in groups with "fantasy" in name/description
+- `"tolkien pdf"` - Shows PDF books by Tolkien
+
+**Performance**:
+- Debounced search input (300ms delay)
+- Indexed search for large libraries
+- Cached filter results
+
+**Files**:
+- `src/app/library/components/LibrarySearch.tsx`
+- `src/store/libraryStore.ts` - Search logic
+- `src/utils/search.ts` - Search utilities
+
+### Various Metadata and Bookshelf Fixes (v0.9.67, #1663)
+
+**Enhancements**: Multiple bug fixes and improvements to metadata editor and bookshelf.
+
+**Fixes Included**:
+1. **Metadata Editor**:
+   - Fixed form validation not working
+   - Corrected date picker format
+   - Improved error handling
+   - Better mobile layout
+
+2. **Bookshelf Display**:
+   - Fixed book cards not updating after metadata edit
+   - Corrected cover image caching issues
+   - Improved grid layout on various screen sizes
+   - Fixed selection state persistence
+
+3. **Performance**:
+   - Enabled parallel web builds checking
+   - Optimized re-renders in bookshelf
+   - Improved metadata save performance
+
+**Translation Updates**:
+- Updated i18n translations for metadata editor
+- Added missing translation keys
+- Improved language consistency
+
+**Files Modified**:
+- `src/app/library/components/MetadataEditor.tsx`
+- `src/app/library/components/Bookshelf.tsx`
+- `src/store/libraryStore.ts`
+- `src/locales/*.json` - Translation files
+
+---
+
 ## Dependencies
 
 - **Tauri Dialog API**: File picker for import
