@@ -199,6 +199,182 @@ if (isWebAppPlatform() && !isPWA()) {
 | **Size** | ~5 MB cached | ~50 MB installed |
 
 
+### Deployment Options
+
+#### Cloudflare Deployment with OpenNext (Added Mar 2025)
+
+**Added**: v0.9.30 (Commit ede37757)
+
+Readest now supports deployment on Cloudflare's edge network using OpenNext, providing better global performance and integration with Cloudflare R2 storage.
+
+**Dependencies**:
+- `@opennextjs/cloudflare` v1.11.0 - Next.js adapter for Cloudflare
+- `aws4fetch` - AWS-compatible S3 client for R2
+
+**Build Scripts** (`package.json`):
+```json
+{
+  "scripts": {
+    "preview": "open-next build && wrangler dev",
+    "deploy": "open-next build && wrangler deploy",
+    "upload": "open-next build && wrangler pages deploy .open-next/worker",
+    "cf-typegen": "wrangler types"
+  }
+}
+```
+
+**OpenNext Configuration** (`open-next.config.ts`):
+```typescript
+export default {
+  default: {
+    override: {
+      wrapper: 'cloudflare-node',
+      converter: 'edge',
+      incrementalCache: 'dummy',
+      tagCache: 'dummy',
+      queue: 'dummy',
+    },
+  },
+};
+```
+
+**R2 Storage Integration**:
+
+Cloudflare R2 provides S3-compatible object storage for books, covers, and user data.
+
+**File**: `src/utils/r2.ts`
+
+```typescript
+import { AwsClient } from 'aws4fetch';
+
+export const getR2Client = () => {
+  return new AwsClient({
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    service: 's3',
+    region: process.env.R2_REGION || 'auto',
+  });
+};
+
+export const getDownloadSignedUrl = async (
+  key: string,
+  expiresIn: number = 3600
+): Promise<string> => {
+  const client = getR2Client();
+  const url = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET_NAME}/${key}`;
+
+  return await client.sign(url, {
+    method: 'GET',
+    aws: { signQuery: true },
+    expiresIn,
+  });
+};
+
+export const getUploadSignedUrl = async (
+  key: string,
+  expiresIn: number = 3600
+): Promise<string> => {
+  const client = getR2Client();
+  const url = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET_NAME}/${key}`;
+
+  return await client.sign(url, {
+    method: 'PUT',
+    aws: { signQuery: true },
+    expiresIn,
+  });
+};
+
+export const deleteObject = async (key: string): Promise<void> => {
+  const client = getR2Client();
+  const url = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET_NAME}/${key}`;
+
+  await client.fetch(url, { method: 'DELETE' });
+};
+```
+
+**Environment Variables Required**:
+```bash
+# R2 Configuration
+R2_REGION=auto
+R2_ACCESS_KEY_ID=your_access_key
+R2_SECRET_ACCESS_KEY=your_secret_key
+R2_ACCOUNT_ID=your_account_id
+R2_BUCKET_NAME=your_bucket_name
+
+# Storage Type Selection
+NEXT_PUBLIC_OBJECT_STORAGE_TYPE=r2  # or 's3'
+```
+
+**Storage API Updates**:
+
+The storage APIs were updated to support both S3 and R2:
+
+**File**: `src/pages/api/storage/upload.ts`
+```typescript
+import { getS3Client } from '@/utils/s3';
+import { getR2Client } from '@/utils/r2';
+
+export default async function handler(req, res) {
+  const storageType = process.env.NEXT_PUBLIC_OBJECT_STORAGE_TYPE || 'r2';
+
+  if (storageType === 'r2') {
+    const signedUrl = await getR2Client().getUploadSignedUrl(key);
+    return res.json({ url: signedUrl });
+  } else {
+    const signedUrl = await getS3Client().getUploadSignedUrl(key);
+    return res.json({ url: signedUrl });
+  }
+}
+```
+
+**Deployment Steps**:
+
+1. **Install Wrangler CLI**:
+   ```bash
+   npm install -g wrangler
+   ```
+
+2. **Login to Cloudflare**:
+   ```bash
+   wrangler login
+   ```
+
+3. **Create R2 Bucket**:
+   ```bash
+   wrangler r2 bucket create readest-books
+   ```
+
+4. **Configure Environment**:
+   Create `.env.production` with R2 credentials
+
+5. **Build and Deploy**:
+   ```bash
+   npm run deploy
+   ```
+
+**Benefits of Cloudflare Deployment**:
+- **Global Edge Network**: Content served from 200+ data centers
+- **Lower Latency**: Geographic proximity to users
+- **Cost-Effective**: No egress fees for R2 storage
+- **DDoS Protection**: Built-in security
+- **Unlimited Bandwidth**: No bandwidth limits
+- **Zero Cold Starts**: Edge Workers are always warm
+
+**Performance Comparison**:
+
+| Metric | Vercel | Cloudflare |
+|--------|--------|------------|
+| **Cold Start** | ~200ms | ~0ms |
+| **Edge Locations** | 100+ | 200+ |
+| **Egress Cost** | $0.40/GB | Free |
+| **Storage Cost** | $0.023/GB/mo | $0.015/GB/mo |
+| **Requests** | $0.40/1M | $0.36/1M |
+
+**Limitations**:
+- No support for Next.js ISR (Incremental Static Regeneration)
+- Limited Node.js APIs (use Cloudflare-compatible alternatives)
+- 128 MB memory limit for Workers
+
 ---
 
 **Related**: [index.md](./index.md) (Main cross-platform support documentation)

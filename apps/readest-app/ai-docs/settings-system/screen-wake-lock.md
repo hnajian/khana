@@ -1,10 +1,11 @@
 # Screen Wake Lock Setting
 
 **Added**: v0.9.13 (Commit #403)
+**Updated**: v0.9.22 (Commit #505) - Focus/visibility handling
 
 ## Overview
 
-The Screen Wake Lock setting prevents the device screen from sleeping during reading sessions, improving the reading experience for users who prefer not to interact with the screen frequently.
+The Screen Wake Lock setting prevents the device screen from sleeping during reading sessions, improving the reading experience for users who prefer not to interact with the screen frequently. The feature intelligently releases the wake lock when the app loses focus or becomes hidden to conserve battery.
 
 ## Implementation
 
@@ -82,11 +83,78 @@ fn keep_screen_awake(enable: bool) -> Result<(), String> {
   - App moves to background (mobile)
   - User disables the setting
   - Browser tab becomes inactive (web)
+  - Window or tab loses focus (added v0.9.22, #502, #505)
 
 **Persistence**:
 - Setting persists across sessions
 - Can be configured globally or per-book
 - Default: `false` (respect system sleep settings)
+
+## Focus and Visibility Handling (v0.9.22 Update)
+
+**Problem Solved** (#502, #505):
+Prior to v0.9.22, the wake lock remained active even when the user switched to a different window or tab, causing unnecessary battery drain.
+
+**Implementation** (`src/hooks/useScreenWakeLock.ts`):
+
+**For Web Platform**:
+```typescript
+useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      // Release wake lock when tab becomes hidden
+      releaseWakeLock();
+    } else if (document.visibilityState === 'visible' && keepScreenAwake) {
+      // Reacquire wake lock when tab becomes visible again
+      requestWakeLock();
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [keepScreenAwake]);
+```
+
+**For Tauri Desktop Apps**:
+```typescript
+useEffect(() => {
+  if (!isTauriApp()) return;
+
+  const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+    if (!focused) {
+      // Release wake lock when window loses focus
+      releaseWakeLock();
+    } else if (focused && keepScreenAwake) {
+      // Reacquire wake lock when window regains focus
+      requestWakeLock();
+    }
+  });
+
+  return () => {
+    unlisten.then((fn) => fn());
+  };
+}, [keepScreenAwake]);
+```
+
+**Benefits**:
+- **Battery Conservation**: Wake lock only active when app is actually visible/focused
+- **Multi-Tasking Friendly**: Allows device to sleep when user switches away
+- **Automatic Recovery**: Wake lock reacquired when user returns to the app
+- **No User Intervention Required**: Handles focus changes transparently
+
+**Behavior Examples**:
+
+| Scenario | Wake Lock Status |
+|----------|------------------|
+| Reading in active tab/window | ✅ Active |
+| Switched to different browser tab | ❌ Released |
+| Switched to different application | ❌ Released |
+| Returned to Readest | ✅ Reacquired |
+| Minimized window | ❌ Released |
+| Restored window | ✅ Reacquired |
 
 ## Platform Support
 
