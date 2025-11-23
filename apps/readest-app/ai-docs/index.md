@@ -1,7 +1,7 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `f4908c45` (0.8.5 → 0.9.31 releases)
-**Last Updated**: February 2025
+**Version**: Documentation for commits `571baf98` through `def157ca` (0.8.5 → 0.9.43 releases)
+**Last Updated**: November 2025
 
 ## Introduction
 
@@ -66,7 +66,8 @@ Each feature document contains:
 | **Cross-Platform Support** | [feature-cross-platform-support.md](./feature-cross-platform-support.md) | Tauri native shell, **web platform support**, **PWA enhancements**, platform-specific code |
 | **Authentication & Sync** | [feature-auth-sync.md](./feature-auth-sync.md) | User accounts, OAuth, cloud sync for progress and notes |
 | **Internationalization** | [feature-internationalization.md](./feature-internationalization.md) | 14 languages, i18next framework, translation management |
-| **Text-to-Speech (TTS)** | [feature-text-to-speech.md](./feature-text-to-speech.md) | **NEW**: Dual backend (Web Speech + Edge TTS), 100+ voices, audio preloading |
+| **Text-to-Speech (TTS)** | [feature-text-to-speech.md](./feature-text-to-speech.md) | Dual backend (Web Speech + Edge TTS), 100+ voices, audio preloading |
+| **Translation System** | [translation-system/index.md](./translation-system/index.md) | **NEW**: Multi-provider translation (DeepL, Azure, Google, Yandex), two-tier caching, quota management |
 
 ## Common Tasks Quick Reference
 
@@ -750,4 +751,167 @@ None - all changes are backward compatible
 
 ---
 
-**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `f4908c45` for context on the codebase state at this point.**
+## Version 0.9.32 - 0.9.43 Updates (f4908c45 → def157ca)
+
+### Major Features Added (Mar - Nov 2025)
+
+1. **Translation System** (v0.9.32-0.9.43)
+   - Multi-provider support: DeepL, Azure, Google Translate, Yandex
+   - Two-tier caching (memory + IndexedDB) for offline translations
+   - KV cache for translation backend (#1184)
+   - Quota management with automatic fallback
+   - API v1/v2 compatibility for DeepL
+   - Responsive translator popup (#1160)
+   - Extension compatibility (LingKuma, Immersive Translate) (#901)
+   - **See**: [translation-system/index.md](./translation-system/index.md)
+
+2. **Bookshelf Views and Sorting** (v0.9.35-0.9.37)
+   - List view for bookshelf (#955)
+   - Sorting by title and author (#887)
+   - Grid view with responsive columns
+   - Book file size display (#1114)
+   - Book description from metadata (#946)
+   - **See**: [library-management/bookshelf.md](./library-management/bookshelf.md)
+
+3. **Theme Customization** (v0.9.37)
+   - Primary color input in theme editor (#970)
+   - Custom theme synchronization to localStorage (#944)
+   - Spell check disabled on color inputs (#1159)
+   - **See**: [settings-system/theme-editor.md](./settings-system/theme-editor.md)
+
+4. **Screen Orientation Control** (v0.9.39-0.9.40)
+   - Lock screen orientation (auto/portrait/landscape) (#1034)
+   - Auto orientation follows system settings (#1122)
+   - Page-specific orientation (library unlocked) (#1084)
+   - **See**: [settings-system/screen-orientation.md](./settings-system/screen-orientation.md)
+
+5. **Prev/Next Section Navigation** (v0.9.43)
+   - Section navigation buttons in footer bar (#1195)
+   - Quick navigation between book sections
+   - **See**: [settings-system/reader-ui-settings.md](./settings-system/reader-ui-settings.md)
+
+6. **Scrolled Mode Pagination** (v0.9.43)
+   - Scrolling overlap in pixels option (#1194)
+   - Scroll offset adjustment for header/footer bars (#1193)
+   - Unified pagination and scroll hooks (#1021)
+   - More robust continuous scroll (#1017)
+   - **See**: [document-reading-engine/index.md](./document-reading-engine/index.md)
+
+7. **Volume Keys Navigation** (v0.9.38)
+   - Volume keys for page turning (#982)
+   - Volume key interception on iOS (#997)
+   - Volume retention when backgrounded (#1014)
+   - **See**: [annotation-system/keyboard-shortcuts.md](./annotation-system/keyboard-shortcuts.md), [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+8. **Immersive UI** (v0.9.36-0.9.41)
+   - Immersive reader UI on iOS and Android (#911)
+   - Hide navigation bar on Android 11+ (#927)
+   - Auto-hide navigation for Android <11 (#960)
+   - System navigation bar swipe gesture (#912)
+   - Transient navigation bar on Android 9 (#1085)
+   - **See**: [cross-platform-support/android.md](./cross-platform-support/android.md), [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+9. **File Manager Integration** (v0.9.35)
+   - Open files from file manager on Android (#895)
+   - Open files from file manager on iOS (#898)
+   - Filename with quotes handling (#897)
+   - Content provider URI handling (#861)
+   - **See**: [cross-platform-support/android.md](./cross-platform-support/android.md), [cross-platform-support/ios.md](./cross-platform-support/ios.md)
+
+10. **In-App Updater** (v0.9.33-0.9.41)
+    - Android in-app updater (#885)
+    - New updater dialog (#874)
+    - Update status in about window (#1109)
+    - Disabled for non-AppImage on Linux (#1141)
+    - Removed deprecated MSI installer (#1187)
+    - **See**: [cross-platform-support/android.md](./cross-platform-support/android.md), [cross-platform-support/linux.md](./cross-platform-support/linux.md)
+
+11. **System Fonts Support** (v0.9.38)
+    - Retrieve system fonts on iOS and Android (#976)
+    - Font weight variants display (#976, #1158)
+    - Filter non-free fonts (#999)
+    - Import system fonts list on Android (#998)
+    - Font preview fixes for Linux (#1023) and Windows (#1054)
+    - **See**: [settings-system/index.md](./settings-system/index.md)
+
+12. **Cloud Backup Status** (v0.9.42)
+    - Show cloud backup status for each book (#1173)
+    - Mobile and desktop indicators
+    - Books without covers can sync (#878)
+    - **See**: [auth-sync/index.md](./auth-sync/index.md)
+
+### Enhancements (0.9.32 - 0.9.43 Period)
+
+- **Settings**:
+  - Fullscreen keyboard shortcut (F11) (#942)
+  - Window maximized/fullscreen conflict resolution (#872)
+  - Open last book on start option (#1052)
+  - Keep screen awake disabled by default (#1149)
+  - Separate header/footer visibility for paginated/scrolled modes (#859)
+  - Compact margin when header/footer dismissed (#1047)
+  - Horizontal margin default fix (#1155)
+
+- **Library Management**:
+  - Download/upload buttons in book details (#891)
+  - Library state maintenance across navigation (#1096)
+  - Delete book updates store properly (#1191)
+
+- **TTS**:
+  - TTS control view hierarchy reorganization (#1119)
+  - Don't scroll when selection in current page (#1046)
+  - Timeout options for iOS (#1037)
+  - Language detection improvements (#1003)
+  - Metadata language fallback (#945)
+  - More English voices for all locales (#969)
+
+- **Annotations**:
+  - Text selector hook refactor (#1131)
+  - Selection anchor preservation across pages (#968)
+  - Underline/squiggly highlight positioning (#845)
+  - Popup footnotes for anchors without EPUB namespace (#956)
+  - Inherit book fonts for popup footnotes (#985)
+  - Footnote visibility fixes (#1099)
+
+- **Sidebar Navigation**:
+  - TOC location information display (#1016)
+  - TOC expansion glitches fix (#1081)
+  - Clickable region expansion for TOC icons (#1044)
+
+- **Document Reading Engine**:
+  - CSS background color override refinements (#1164, #1163)
+  - Gutenberg eBooks compatibility (#1154)
+  - Font weight variants for built-in fonts (#1158)
+  - Text align and indent override (#1104, #1105)
+  - TXT parser improvements (#1139, #1077, #1043, #1024, #1005)
+  - Viewport size calculation fixes (#1045)
+  - Image dimension layout fixes (#1090)
+  - Apply layout styles to div tags (#1142)
+  - Background replacement on attribute change (#1126)
+  - Style overriding fixes (#1091, #1117, #1142)
+
+- **Platform-Specific**:
+  - Android: Back key intercept (#983), drag handler padding (#1039, #1110), status bar height query (#947), dismiss status bar on resume (#952), action bar closure (#1086)
+  - iOS: Volume keys improvements (#997, #1014)
+  - macOS: OAuth via ASWebAuthenticationSession (#866), native Sign in with Apple (#856), avatar caching (#1140)
+  - Linux: xdg-mime check for deeplink (#951), ARM HF architecture (#1133)
+  - Windows: Fullscreen/maximized handling (#872)
+
+- **UI/UX**:
+  - Mobile UI fixes and enhancements (#1113)
+  - Less sensitive trackpad/mouse page flipping (#1172)
+  - Link styling improvements (#1083)
+  - Dialog drag handler layout (#1076, #1110, #1039)
+  - Action bar dismiss with footer (#1086)
+  - Screen orientation for library page (#1084)
+
+- **Internationalization**:
+  - Nederlands translations (#1161)
+  - RTL layout for bottom configuration panel (#850)
+
+### Breaking Changes
+
+None - all changes are backward compatible
+
+---
+
+**For any questions or issues with this documentation, please consult the commit history from `571baf98` to `def157ca` for context on the codebase state at this point.**
