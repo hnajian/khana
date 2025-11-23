@@ -734,4 +734,291 @@ class EPUBView {
 
 ---
 
+## Version 0.9.91 Updates (dd5371d2 → 8ee53d3)
+
+### Resolved EPUB Import Failures (v0.9.91, #2370)
+
+**Fix**: Resolve import failures for certain EPUB files with malformed publisher metadata.
+
+**Problem**: Some EPUB files failed to import when the publisher field in the metadata was already parsed but the code attempted to remap it from author or contributor fields, causing a parsing error.
+
+**Example Failure Case**:
+```xml
+<metadata>
+  <dc:creator opf:role="pbl" />  <!-- Empty creator with publisher role -->
+  <dc:publisher>Example Press</dc:publisher>
+</metadata>
+```
+
+**Issue**: The EPUB parser would try to extract the publisher from the `dc:creator` element even though `dc:publisher` was already parsed, leading to conflicts and import failures.
+
+**Solution**: Check if publisher has already been parsed before attempting to remap from other fields.
+
+**Implementation** (`packages/foliate-js/epub.js`):
+```typescript
+const parseMetadata = (opfDoc: Document): BookMetadata => {
+  const metadata = {
+    title: '',
+    author: '',
+    publisher: null as string | null,
+    // ...
+  };
+
+  // Parse dc:publisher first
+  const publisherElem = opfDoc.querySelector('dc\\:publisher, publisher');
+  if (publisherElem) {
+    metadata.publisher = publisherElem.textContent?.trim() || null;
+  }
+
+  // Parse dc:creator elements
+  const creators = opfDoc.querySelectorAll('dc\\:creator, creator');
+  for (const creator of creators) {
+    const role = creator.getAttribute('opf:role');
+    const text = creator.textContent?.trim();
+
+    if (!text) continue;  // Skip empty creators
+
+    if (role === 'aut') {
+      metadata.author = text;
+    } else if (role === 'pbl' && !metadata.publisher) {
+      // Only use creator as publisher if publisher not already set
+      metadata.publisher = text;
+    }
+  }
+
+  // Fallback: Use contributor as publisher if not set
+  if (!metadata.publisher) {
+    const contributors = opfDoc.querySelectorAll('dc\\:contributor, contributor');
+    for (const contributor of contributors) {
+      const role = contributor.getAttribute('opf:role');
+      if (role === 'pbl') {
+        metadata.publisher = contributor.textContent?.trim() || null;
+        break;
+      }
+    }
+  }
+
+  return metadata;
+};
+```
+
+**Key Changes**:
+1. Parse `dc:publisher` element first
+2. Only remap from `dc:creator` or `dc:contributor` if publisher not already set
+3. Skip empty creator/contributor elements
+4. Prevent duplicate publisher assignment
+
+**Benefits**:
+- EPUBs with complex metadata structures now import successfully
+- Prevents metadata conflicts
+- More robust EPUB parsing
+- Handles edge cases in publisher/author/contributor assignments
+
+**Files**:
+- `packages/foliate-js/epub.js` - EPUB metadata parser
+- `src/libs/document.ts` - Document loader
+
+### Support for Inline CSS Style Transformers (v0.9.91, #2403)
+
+**Feature**: Apply style transformers to inline CSS styles, not just external stylesheets.
+
+**Overview**: Previously, custom style overrides (e.g., dark mode, custom colors) only applied to `<style>` tags and external CSS files. Inline styles (`style="..."` attributes) were ignored, leading to inconsistent styling.
+
+**Problem Example**:
+```html
+<!-- This text would ignore dark mode override -->
+<p style="color: black; background: white;">
+  This text stays black on white even in dark mode.
+</p>
+```
+
+**Solution**: Parse and transform inline `style` attributes using the same style transformer pipeline.
+
+**Implementation** (`packages/foliate-js/view.js`):
+```typescript
+class StyleTransformer {
+  transformInlineStyles(element: HTMLElement) {
+    // Get all elements with inline styles
+    const elementsWithStyles = element.querySelectorAll('[style]');
+
+    for (const elem of elementsWithStyles) {
+      const inlineStyle = elem.getAttribute('style');
+      if (!inlineStyle) continue;
+
+      // Parse inline CSS
+      const styleDeclarations = this.parseInlineCSS(inlineStyle);
+
+      // Apply transformations
+      const transformedDeclarations = styleDeclarations.map(decl => {
+        return this.transformDeclaration(decl);
+      });
+
+      // Rebuild style attribute
+      const newStyle = transformedDeclarations.join('; ');
+      elem.setAttribute('style', newStyle);
+    }
+  }
+
+  parseInlineCSS(styleString: string): CSSDeclaration[] {
+    return styleString.split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map(s => {
+        const [property, value] = s.split(':').map(x => x.trim());
+        return { property, value };
+      });
+  }
+
+  transformDeclaration(decl: CSSDeclaration): string {
+    let { property, value } = decl;
+
+    // Apply color transformations for dark mode
+    if (this.settings.theme === 'dark') {
+      if (property === 'color') {
+        value = this.invertColor(value);
+      }
+      if (property === 'background' || property === 'background-color') {
+        value = this.invertColor(value);
+      }
+    }
+
+    // Apply font overrides
+    if (this.settings.overrideFonts && property === 'font-family') {
+      value = this.settings.fontFamily;
+    }
+
+    return `${property}: ${value}`;
+  }
+}
+```
+
+**Application Flow**:
+1. Book content is loaded into view
+2. Style transformer scans for `[style]` attributes
+3. Inline styles are parsed into declaration objects
+4. Each declaration is transformed (color inversion, font override, etc.)
+5. Transformed styles are written back to the element
+
+**Supported Transformations**:
+- Color inversion for dark mode
+- Background color overrides
+- Font family overrides
+- Text color customization
+- Link color adjustments
+
+**Use Cases**:
+- Dark mode now applies to inline-styled elements
+- Custom theme colors affect all text, not just stylesheet-styled
+- Font override works on inline-styled headings/paragraphs
+- Better EPUB compatibility (many EPUBs use inline styles heavily)
+
+**Related Enhancement** (#2403): Bold text for current chapter in the TOC when in E-Ink mode.
+
+**Files**:
+- `packages/foliate-js/view.js` - Inline style transformer
+- `src/app/reader/utils/styleTransformer.ts` - Style transformation logic
+
+### Scale Tables to Fit Column Constraints (v0.9.91, #2455)
+
+**Fix**: Tables that exceed column width now automatically scale to fit within the reading column.
+
+**Problem**: Large tables in EPUB files would overflow the column boundaries, requiring horizontal scrolling and breaking the reading flow.
+
+**Example Failure**:
+```
+┌─────────────────────┐
+│ Reading Column      │
+│                     │
+│ Some text here...   │
+│                     │
+│ ┌──────────────────────────────────────────────┐
+│ │ Table Header 1 | Header 2 | Header 3 | Head│←─ Table overflows!
+│ │ Cell 1        | Cell 2   | Cell 3   | Cell│
+│ └──────────────────────────────────────────────┘
+│                     │
+└─────────────────────┘
+```
+
+**Solution**: Apply CSS transforms to scale oversized tables proportionally.
+
+**Implementation** (`packages/foliate-js/view.js`):
+```typescript
+class TableScaler {
+  scaleTablesWithinColumn(container: HTMLElement, columnWidth: number) {
+    const tables = container.querySelectorAll('table');
+
+    for (const table of tables) {
+      // Get table's natural width
+      const tableWidth = table.getBoundingClientRect().width;
+
+      if (tableWidth > columnWidth) {
+        // Calculate scale factor
+        const scale = columnWidth / tableWidth;
+
+        // Apply transform with transform-origin at top-left
+        table.style.transform = `scale(${scale})`;
+        table.style.transformOrigin = 'top left';
+
+        // Adjust container height to account for scaled height
+        const scaledHeight = table.scrollHeight * scale;
+        table.style.marginBottom = `${scaledHeight - table.scrollHeight}px`;
+
+        // Make table width 100% of original size before scaling
+        table.style.width = `${100 / scale}%`;
+      }
+    }
+  }
+}
+
+// Apply on content load and window resize
+view.on('relocated', () => {
+  const columnWidth = view.getColumnWidth();
+  tableScaler.scaleTablesWithinColumn(view.content, columnWidth);
+});
+```
+
+**CSS Enhancements**:
+```css
+table {
+  /* Prevent table from breaking column layout */
+  max-width: 100%;
+  overflow-x: auto;
+
+  /* Ensure scaling doesn't affect other content */
+  display: block;
+}
+
+/* Preserve table layout while scaling */
+table.scaled {
+  table-layout: fixed;
+  width: 100%;
+}
+```
+
+**Adaptive Behavior**:
+- **Small overflow** (<10%): No scaling, table scrolls horizontally
+- **Medium overflow** (10-50%): Scale table to fit column
+- **Large overflow** (>50%): Scale and enable horizontal scroll as fallback
+
+**Responsive Handling**:
+- Recalculates scale on window resize
+- Adjusts for multi-column layouts
+- Works with custom column widths
+- Respects reading direction (LTR/RTL)
+
+**User Experience**:
+- No horizontal scrolling required
+- Tables remain readable
+- Maintains table structure and alignment
+- Smooth scaling transitions
+
+**Related Commit**: Closes #2445
+
+**Files**:
+- `packages/foliate-js/view.js` - Table scaling logic
+- `src/app/reader/components/FoliateViewer.tsx` - Integration
+- `src/styles/epub.css` - Table styling
+
+---
+
 ## Performance Considerations

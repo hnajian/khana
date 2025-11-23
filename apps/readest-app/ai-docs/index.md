@@ -1,7 +1,32 @@
 # Readest Codebase Documentation Index
 
-**Version**: Documentation for commits `571baf98` through `dd5371d2` (0.8.5 → 0.9.90 releases)
+**Version**: Documentation for commits `571baf98` through `8ee53d3` (0.8.5 → 0.9.91 releases)
 **Last Updated**: November 2025
+
+## Recent Updates (Version 0.9.91)
+
+**Commit Range**: `dd5371d2` → `8ee53d3`
+
+### Major Features
+- **[Nested Groups in Bookshelf](./library-management/index.md#nested-groups-in-bookshelf-v0991-2449)** - Hierarchical book organization with unlimited nesting levels
+- **[Email Address Update](./auth-sync/index.md#email-address-update-support-v0991-2437)** - Users can now change their account email with two-step verification
+
+### EPUB & PDF Improvements
+- **[Resolved EPUB Import Failures](./document-reading-engine/index.md#resolved-epub-import-failures-v0991-2370)** - Fixed import issues with malformed publisher metadata
+- **[Inline CSS Style Transformers](./document-reading-engine/index.md#support-for-inline-css-style-transformers-v0991-2403)** - Dark mode and custom styles now apply to inline styles
+- **[Table Scaling](./document-reading-engine/index.md#scale-tables-to-fit-column-constraints-v0991-2455)** - Large tables automatically scale to fit reading column
+- **[Enhanced PDF Context Menu](./annotation-system/index.md#enhanced-pdf-context-menu-for-translation-and-touch-handling-v0991-2430)** - Better translation and touch support for PDF annotations
+
+### Annotation & Reading Enhancements
+- **[More Footnote Formats](./annotation-system/index.md#support-for-more-footnote-formats-v0991-2425)** - Support for EPUB 2, Kindle, and publisher-specific footnote formats
+
+### Library Management
+- **[Import to Current Group](./library-management/index.md#import-files-directly-into-current-book-group-v0991-2393)** - Imported books automatically added to active group
+- **[Fixed Library Search](./library-management/index.md#fixed-invalid-regular-expression-in-library-search-v0991-2439)** - Resolved crash with special characters in search queries
+
+### TTS Fixes
+- **[Fixed TTS Event Listeners](./text-to-speech/index.md#fixed-tts-event-listener-v0991-2349)** - Proper event listener lifecycle management
+- **[Fixed Voice Selection](./text-to-speech/index.md#fixed-incorrectly-selected-voices-v0991-2426)** - Improved voice matching algorithm
 
 ## Introduction
 

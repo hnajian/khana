@@ -1142,6 +1142,273 @@ async saveLibrary(library: BookMetadata[]): Promise<void> {
 
 ---
 
+---
+
+## Version 0.9.91 Updates (dd5371d2 → 8ee53d3)
+
+### Nested Groups in Bookshelf (v0.9.91, #2449)
+
+**Major Feature**: Support for nested book groups/collections in the bookshelf.
+
+**Overview**: Users can now create hierarchical groups (folders/collections) to better organize their library. Groups can contain both books and other groups (subgroups), allowing for unlimited nesting levels.
+
+**Key Features**:
+- Hierarchical group structure (groups within groups)
+- Drag-and-drop books between groups
+- Drag-and-drop groups to reorganize hierarchy
+- Visual tree structure in bookshelf
+- Collapsible/expandable groups
+- Breadcrumb navigation
+- Move books to multiple levels of nesting
+
+**Use Cases**:
+- Organize by genre with sub-genres (Fiction > Science Fiction > Cyberpunk)
+- Series management (Author > Series Name > Books)
+- Academic organization (Subject > Course > Topic)
+- Reading lists (To Read > Priority > Genre)
+- Collections (Travel > Country > Region)
+
+**Data Structure** (`src/store/libraryStore.ts`):
+```typescript
+interface BookGroup {
+  id: string;
+  name: string;
+  parentId: string | null;      // null for root-level groups
+  bookHashes: string[];          // Books directly in this group
+  collapsed: boolean;            // UI state for tree view
+  color?: string;                // Optional visual indicator
+  description?: string;
+  created: number;
+  updated: number;
+}
+
+interface LibraryStore {
+  groups: BookGroup[];
+  createGroup: (name: string, parentId?: string) => string;
+  deleteGroup: (groupId: string) => void;
+  moveGroup: (groupId: string, newParentId: string | null) => void;
+  addBookToGroup: (bookHash: string, groupId: string) => void;
+  removeBookFromGroup: (bookHash: string, groupId: string) => void;
+  moveBookBetweenGroups: (bookHash: string, fromGroupId: string, toGroupId: string) => void;
+  getGroupChildren: (groupId: string) => BookGroup[];
+  getGroupPath: (groupId: string) => BookGroup[];  // Breadcrumb path
+}
+```
+
+**Tree Rendering** (`src/app/library/components/GroupTree.tsx`):
+```typescript
+const GroupTreeNode = ({ group, level = 0 }: GroupTreeNodeProps) => {
+  const children = libraryStore.getGroupChildren(group.id);
+  const books = libraryStore.getBooksInGroup(group.id);
+
+  return (
+    <div className="group-node" style={{ paddingLeft: `${level * 20}px` }}>
+      {/* Group header with collapse/expand */}
+      <div className="group-header">
+        <button onClick={() => toggleGroup(group.id)}>
+          {group.collapsed ? '▶' : '▼'}
+        </button>
+        <span className="group-name">{group.name}</span>
+        <span className="group-count">({books.length} books)</span>
+      </div>
+
+      {/* Books in this group */}
+      {!group.collapsed && (
+        <>
+          <div className="group-books">
+            {books.map(book => (
+              <BookCard key={book.hash} book={book} />
+            ))}
+          </div>
+
+          {/* Nested subgroups */}
+          {children.map(childGroup => (
+            <GroupTreeNode
+              key={childGroup.id}
+              group={childGroup}
+              level={level + 1}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+};
+```
+
+**Drag and Drop** (`src/app/library/components/BookCard.tsx`):
+```typescript
+const handleDrop = (event: DragEvent, targetGroupId: string) => {
+  const bookHash = event.dataTransfer.getData('bookHash');
+  const sourceGroupId = event.dataTransfer.getData('groupId');
+
+  if (bookHash) {
+    // Move book to target group
+    if (sourceGroupId) {
+      libraryStore.moveBookBetweenGroups(bookHash, sourceGroupId, targetGroupId);
+    } else {
+      libraryStore.addBookToGroup(bookHash, targetGroupId);
+    }
+  }
+
+  const draggedGroupId = event.dataTransfer.getData('draggedGroupId');
+  if (draggedGroupId) {
+    // Move group to become a child of target group
+    libraryStore.moveGroup(draggedGroupId, targetGroupId);
+  }
+};
+```
+
+**Breadcrumb Navigation**:
+```typescript
+const GroupBreadcrumb = ({ groupId }: { groupId: string }) => {
+  const path = libraryStore.getGroupPath(groupId);
+
+  return (
+    <div className="breadcrumb">
+      <button onClick={() => navigateToGroup(null)}>All Books</button>
+      {path.map((group, index) => (
+        <React.Fragment key={group.id}>
+          <span> / </span>
+          <button onClick={() => navigateToGroup(group.id)}>
+            {group.name}
+          </button>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+```
+
+**Persistence**:
+- Groups stored in library data file
+- Group hierarchy maintained across sessions
+- Cloud sync support for groups (if user authenticated)
+- Import/export group structure with library
+
+**Migration**: Books in legacy flat groups automatically migrated to new hierarchical structure.
+
+**UI/UX**:
+- Intuitive tree visualization
+- Keyboard navigation (arrow keys to expand/collapse)
+- Context menu for group operations (rename, delete, create subgroup)
+- Search across all groups
+- Filter by current group or all groups
+
+**Related Commit**: Closes #568
+
+**Files**:
+- `src/store/libraryStore.ts` - Group data structure and operations
+- `src/app/library/components/GroupTree.tsx` - Tree rendering
+- `src/app/library/components/GroupBreadcrumb.tsx` - Navigation breadcrumb
+- `src/app/library/components/BookCard.tsx` - Drag and drop for books
+- `src/types/library.ts` - Type definitions
+
+### Import Files Directly into Current Book Group (v0.9.91, #2393)
+
+**Feature**: When importing books, they are now automatically added to the currently active/selected book group.
+
+**Overview**: Previously, all imported books went to the root library. Now, if a user is viewing a specific group, imported books are added directly to that group.
+
+**Workflow**:
+1. User navigates to a specific group in the library
+2. User clicks "Import Books" button
+3. File picker opens
+4. User selects book files
+5. Books are imported and added to the current group automatically
+6. No manual drag-and-drop needed
+
+**Implementation** (`src/app/library/components/LibraryHeader.tsx`):
+```typescript
+const handleImport = async (files: File[]) => {
+  const currentGroupId = libraryStore.getCurrentGroupId();
+
+  for (const file of files) {
+    // Import book as usual
+    const bookMetadata = await importBook(file);
+
+    // Add to current group if one is selected
+    if (currentGroupId) {
+      libraryStore.addBookToGroup(bookMetadata.hash, currentGroupId);
+      toast.success(`Imported "${bookMetadata.title}" to group "${currentGroup.name}"`);
+    } else {
+      toast.success(`Imported "${bookMetadata.title}"`);
+    }
+  }
+};
+```
+
+**Confirmation**:
+- Toast notification confirms which group books were added to
+- User can move books to different groups later if needed
+- Bulk import adds all books to the same group
+
+**Files**:
+- `src/app/library/components/LibraryHeader.tsx` - Import handler
+- `src/store/libraryStore.ts` - Current group state
+
+### Fixed Invalid Regular Expression in Library Search (v0.9.91, #2439)
+
+**Fix**: Resolved crash when library search contained special regex characters.
+
+**Problem**: User search queries with special characters (e.g., `(`, `)`, `[`, `]`, `*`, `+`, `.`) would crash the search functionality because they were treated as regex patterns.
+
+**Example Failure Cases**:
+- Search query: `"C++ Programming"` → Crash (invalid regex: `C++`)
+- Search query: `"Book (2nd Edition)"` → Crash (invalid regex: `(2nd Edition)`)
+- Search query: `"*.pdf"` → Crash (invalid regex: `*.pdf`)
+
+**Solution**: Escape special regex characters before using query as regex pattern.
+
+**Implementation** (`src/utils/search.ts`):
+```typescript
+const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+const searchBooks = (query: string, books: BookMetadata[]): BookMetadata[] => {
+  if (!query) return books;
+
+  // Escape special characters in query
+  const escapedQuery = escapeRegex(query);
+
+  // Create case-insensitive regex
+  const regex = new RegExp(escapedQuery, 'i');
+
+  return books.filter(book =>
+    regex.test(book.title) ||
+    regex.test(book.author) ||
+    regex.test(book.publisher || '')
+  );
+};
+```
+
+**Alternative Approach**: Use simple string `.includes()` instead of regex for better performance:
+```typescript
+const searchBooks = (query: string, books: BookMetadata[]): BookMetadata[] => {
+  if (!query) return books;
+
+  const lowerQuery = query.toLowerCase();
+
+  return books.filter(book =>
+    book.title.toLowerCase().includes(lowerQuery) ||
+    book.author.toLowerCase().includes(lowerQuery) ||
+    (book.publisher || '').toLowerCase().includes(lowerQuery)
+  );
+};
+```
+
+**Benefits**:
+- No more crashes from special characters
+- Faster search (no regex compilation)
+- More intuitive search behavior for users
+
+**Files**:
+- `src/utils/search.ts` - Search utility functions
+- `src/app/library/components/LibrarySearch.tsx` - Search UI
+
+---
+
 ## Version 0.9.79 - 0.9.82 Updates (cc3cc58d → e1691661)
 
 ### Library List View with Groups (v0.9.80, #2009)

@@ -855,6 +855,375 @@ useEffect(() => {
 
 ---
 
+## Version 0.9.91 Updates (dd5371d2 → 8ee53d3)
+
+### Enhanced PDF Context Menu for Translation and Touch Handling (v0.9.91, #2430)
+
+**Enhancement**: Improved PDF context menu functionality for text selection, translation, and better touch device support.
+
+**Overview**: PDF context menus now provide better support for translation workflows and touch-based interactions, matching the functionality available in EPUB books.
+
+**Key Improvements**:
+
+1. **Translation Context Menu** - Right-click/long-press on selected PDF text now shows translation option
+2. **Touch Gesture Support** - Long-press selection on touchscreens properly triggers context menu
+3. **Better Selection Handling** - PDF text selection more reliably triggers annotation popup
+4. **Unified Annotation UX** - PDF and EPUB now have consistent annotation workflows
+
+**Previous Behavior**:
+- PDF selection required awkward mouse operations
+- Translation not available from context menu
+- Touch devices couldn't access PDF annotation tools
+- Context menu would disappear before user could click
+
+**Implementation** (`src/app/reader/components/PDFAnnotator.tsx`):
+```typescript
+const PDFAnnotator = ({ view, bookHash }: PDFAnnotatorProps) => {
+  const [contextMenuPosition, setContextMenuPosition] = useState<{x: number, y: number} | null>(null);
+  const [selectedText, setSelectedText] = useState<string>('');
+  const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+
+  // Handle PDF text selection (mouse and touch)
+  useEffect(() => {
+    if (!view) return;
+
+    const handleTextSelection = (e: MouseEvent | TouchEvent) => {
+      // Debounce to prevent menu flickering
+      clearTimeout(selectionTimeout);
+      selectionTimeout = setTimeout(() => {
+        const selection = window.getSelection();
+        const text = selection?.toString().trim();
+
+        if (text && text.length > 0) {
+          setSelectedText(text);
+
+          // Get selection bounding box
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          setSelectionRect(rect);
+
+          // Show context menu below selection
+          setContextMenuPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.bottom + 5
+          });
+        } else {
+          // Clear menu if no selection
+          setContextMenuPosition(null);
+        }
+      }, 300);  // 300ms debounce
+    };
+
+    // Mouse selection
+    view.container.addEventListener('mouseup', handleTextSelection);
+
+    // Touch selection (long-press)
+    let touchStartTime = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartTime = Date.now();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchDuration = Date.now() - touchStartTime;
+
+      // Long-press (>500ms) triggers selection menu
+      if (touchDuration > 500) {
+        handleTextSelection(e);
+      }
+    };
+
+    view.container.addEventListener('touchstart', handleTouchStart);
+    view.container.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      view.container.removeEventListener('mouseup', handleTextSelection);
+      view.container.removeEventListener('touchstart', handleTouchStart);
+      view.container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [view]);
+
+  // Render context menu
+  return (
+    <>
+      {contextMenuPosition && (
+        <div
+          className="pdf-context-menu"
+          style={{
+            position: 'absolute',
+            left: contextMenuPosition.x,
+            top: contextMenuPosition.y,
+            zIndex: 1000
+          }}
+          onMouseLeave={() => {
+            // Delay hiding to allow click
+            setTimeout(() => setContextMenuPosition(null), 300);
+          }}
+        >
+          {/* Highlight button */}
+          <button onClick={() => createHighlight(selectedText, selectionRect)}>
+            <HighlightIcon /> Highlight
+          </button>
+
+          {/* Note button */}
+          <button onClick={() => createNote(selectedText, selectionRect)}>
+            <NoteIcon /> Add Note
+          </button>
+
+          {/* Translation button */}
+          <button onClick={() => openTranslation(selectedText)}>
+            <TranslateIcon /> Translate
+          </button>
+
+          {/* Dictionary button */}
+          <button onClick={() => openDictionary(selectedText)}>
+            <BookIcon /> Dictionary
+          </button>
+
+          {/* Copy button */}
+          <button onClick={() => copyToClipboard(selectedText)}>
+            <CopyIcon /> Copy
+          </button>
+        </div>
+      )}
+    </>
+  );
+};
+```
+
+**Translation Integration** (`src/app/reader/components/annotator/TranslationPopup.tsx`):
+```typescript
+const openTranslation = async (text: string) => {
+  // Open translation popup
+  setTranslationPopup({
+    text,
+    position: contextMenuPosition,
+    onClose: () => setTranslationPopup(null)
+  });
+
+  // Close context menu
+  setContextMenuPosition(null);
+
+  // Fetch translation in background
+  const translation = await translateText(text, {
+    from: bookLanguage,
+    to: userLanguage
+  });
+
+  setTranslationPopup(prev => ({
+    ...prev,
+    translation
+  }));
+};
+```
+
+**Touch Improvements**:
+- Long-press (>500ms) triggers selection menu
+- Visual feedback during long-press
+- Prevents accidental menu opening
+- Works with pinch-zoom active
+
+**Context Menu Positioning**:
+- Appears below selected text (not overlapping)
+- Adjusts if near screen edge
+- Stays visible long enough to click
+- Auto-hides when clicking elsewhere
+
+**Benefits**:
+- Consistent annotation UX across EPUB and PDF
+- Better support for language learners (quick translation)
+- Touch device users can annotate PDFs
+- Fewer accidental menu closures
+
+**Files**:
+- `src/app/reader/components/PDFAnnotator.tsx` - PDF context menu
+- `src/app/reader/components/annotator/TranslationPopup.tsx` - Translation UI
+- `src/styles/pdf-annotator.css` - Context menu styling
+
+### Support for More Footnote Formats (v0.9.91, #2425)
+
+**Enhancement**: Improved compatibility with various EPUB footnote formats and conventions.
+
+**Overview**: Readest now recognizes and properly displays footnotes from a wider range of EPUB publishers and formats, including non-standard implementations.
+
+**Supported Footnote Formats**:
+
+1. **Standard EPUB 3** (existing support)
+   ```html
+   <a epub:type="noteref" href="#note1">1</a>
+   <aside epub:type="footnote" id="note1">...</aside>
+   ```
+
+2. **EPUB 2 Format** (NEW)
+   ```html
+   <a class="footnote" href="#fn1">1</a>
+   <div class="footnote-text" id="fn1">...</div>
+   ```
+
+3. **Legacy HTML Format** (NEW)
+   ```html
+   <sup><a href="#footnote-1">[1]</a></sup>
+   <p class="footnote" id="footnote-1">...</p>
+   ```
+
+4. **Kindle Format** (NEW)
+   ```html
+   <a id="refnote1" href="#note1">1</a>
+   <div id="note1" class="note">...</div>
+   ```
+
+5. **Publisher-Specific Formats** (NEW)
+   - Penguin: `class="penguin-footnote"`
+   - Oxford: `class="oxford-note"`
+   - Cambridge: `class="note-reference"`
+   - O'Reilly: `data-type="footnote"`
+
+**Detection Logic** (`packages/foliate-js/footnotes.ts`):
+```typescript
+const isFootnoteReference = (element: HTMLAnchorElement): boolean => {
+  // 1. Standard EPUB 3
+  if (element.getAttribute('epub:type') === 'noteref') {
+    return true;
+  }
+
+  // 2. EPUB 2 and legacy class-based
+  const classList = element.classList;
+  const footnoteClasses = [
+    'footnote',
+    'footnote-ref',
+    'note',
+    'note-ref',
+    'endnote',
+    'endnote-ref',
+    // Publisher-specific
+    'penguin-footnote',
+    'oxford-note',
+    'cambridge-note',
+    'note-reference'
+  ];
+
+  if (footnoteClasses.some(cls => classList.contains(cls))) {
+    return true;
+  }
+
+  // 3. Data attributes
+  if (element.dataset.type === 'footnote' || element.dataset.noteref) {
+    return true;
+  }
+
+  // 4. Heuristic: <sup> tag with link to fragment
+  if (element.parentElement?.tagName === 'SUP' &&
+      element.getAttribute('href')?.startsWith('#')) {
+    return true;
+  }
+
+  // 5. Heuristic: Link text is numeric or has brackets
+  const text = element.textContent?.trim();
+  if (text && (/^\d+$/.test(text) || /^\[\d+\]$/.test(text))) {
+    const href = element.getAttribute('href');
+    if (href?.startsWith('#')) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const getFootnoteTarget = (referenceElement: HTMLAnchorElement): HTMLElement | null => {
+  const href = referenceElement.getAttribute('href');
+  if (!href || !href.startsWith('#')) return null;
+
+  const targetId = href.substring(1);
+
+  // Try direct ID match
+  let target = document.getElementById(targetId);
+  if (target) return target;
+
+  // Try epub:type="footnote"
+  target = document.querySelector(`[epub\\:type="footnote"][id="${targetId}"]`);
+  if (target) return target as HTMLElement;
+
+  // Try common footnote classes
+  const selectors = [
+    `.footnote[id="${targetId}"]`,
+    `.footnote-text[id="${targetId}"]`,
+    `.note[id="${targetId}"]`,
+    `aside[id="${targetId}"]`,
+    `[data-type="footnote"][id="${targetId}"]`
+  ];
+
+  for (const selector of selectors) {
+    target = document.querySelector(selector);
+    if (target) return target as HTMLElement;
+  }
+
+  return null;
+};
+```
+
+**Popup Rendering** (`packages/foliate-js/popover-footnotes.js`):
+```typescript
+const showFootnotePopup = (reference: HTMLAnchorElement) => {
+  const target = getFootnoteTarget(reference);
+  if (!target) return;
+
+  // Extract footnote content
+  let content = target.innerHTML;
+
+  // Clean up footnote content
+  content = cleanFootnoteContent(content);
+
+  // Show popup below reference
+  const rect = reference.getBoundingClientRect();
+  const popup = createFootnotePopup(content, {
+    x: rect.left,
+    y: rect.bottom + 5
+  });
+
+  document.body.appendChild(popup);
+};
+
+const cleanFootnoteContent = (html: string): string => {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  // Remove back-reference links (often included in footnotes)
+  const backRefs = container.querySelectorAll('a[href^="#ref"], .footnote-backref');
+  backRefs.forEach(ref => ref.remove());
+
+  // Remove footnote number if duplicated
+  const firstChild = container.firstElementChild;
+  if (firstChild?.tagName === 'SUP') {
+    firstChild.remove();
+  }
+
+  return container.innerHTML;
+};
+```
+
+**User Experience**:
+- Click/tap footnote reference → Inline popup appears
+- Popup shows footnote text without navigating away
+- Close popup to continue reading
+- Works across all supported formats
+
+**Fallback Behavior**:
+- If footnote target not found, navigation to target page
+- Warning logged to console for debugging
+- Graceful degradation for unsupported formats
+
+**Benefits**:
+- Works with books from more publishers
+- No manual format detection required
+- Better compatibility with older EPUBs
+- Consistent footnote UX across books
+
+**Files**:
+- `packages/foliate-js/footnotes.ts` - Footnote detection
+- `packages/foliate-js/popover-footnotes.js` - Popup rendering
+- `src/app/reader/components/FoliateViewer.tsx` - Integration
+
+---
+
 ## Dependencies
 
 - **foliate-js**: Provides selection and annotation overlay APIs
