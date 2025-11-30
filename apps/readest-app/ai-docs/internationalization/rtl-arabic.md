@@ -122,14 +122,6 @@ export type WritingMode =
 - **Vertical (RTL)**: Vertical text, right-to-left, top-to-bottom (for CJK)
 - **RTL Direction**: Horizontal text, right-to-left, top-to-bottom (for Arabic/Hebrew)
 
-**Visual Representation**:
-```
-[Auto]  [Horizontal LTR]  [Vertical RTL]  [RTL Direction]
-  │            │               │               │
-  └─> Auto     └─> ←           └─> ↓           └─> ←
-      detect        LTR             Vertical        RTL
-                    horizontal      CJK             Arabic
-```
 
 ### Configuration Storage
 

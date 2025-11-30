@@ -1383,11 +1383,3 @@ useEffect(() => {
 | **Compact Margins** | v0.9.39 | #1047 | Maximized space when UI hidden |
 
 ---
-
-**Last Updated**: Documentation for commit def157ca (November 2025)
-**Related Documents**:
-- [Settings System Index](./index.md)
-- [Custom CSS Editor](./custom-css-editor.md)
-- [Screen Wake Lock](./screen-wake-lock.md)
-- [Screen Orientation](./screen-orientation.md)
-- [Theme Editor](./theme-editor.md)
