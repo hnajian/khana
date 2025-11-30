@@ -1,0 +1,7 @@
+generated: "2025-11-18"
+project: "khana"
+project_type: "software"
+selected_track: "method"
+field_type: "brownfield"
+workflow_path: ".bmad/bmm/workflows/workflow-status/paths/method-brownfield.yaml"
+workflow_status: "[{id: document-project, phase: Documentation, status: ai-docs/index.md}, {id: brainstorm-project, phase: Discovery, status: optional}, {id: research, phase: Discovery, status: optional}, {id: product-brief, phase: Discovery, status: optional}, {id: prd, phase: Planning, status: ai-docs/prd.md}, {id: validate-prd, phase: Planning, status: optional}, {id: create-epics-and-stories, phase: Planning, status: optional}, {id: create-design, phase: Planning, status: conditional}, {id: create-epics-and-stories-after-ux, phase: Planning, status: optional}, {id: create-architecture, phase: Solutioning, status: recommended}, {id: create-epics-and-stories-final, phase: Solutioning, status: required}, {id: test-design, phase: Solutioning, status: recommended}, {id: validate-architecture, phase: Solutioning, status: optional}, {id: implementation-readiness, phase: Solutioning, status: required}, {id: sprint-planning, phase: Implementation, status: required}]"

@@ -1,0 +1,65 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2025-11-18T00:00:00.000Z",
+    "last_updated": "2025-11-18T00:00:00.000Z"
+  },
+  "mode": "initial_scan",
+  "scan_level": "exhaustive",
+  "project_root": "/home/hossein/Projects/khana",
+  "output_folder": "/home/hossein/Projects/khana/ai-docs",
+  "completed_steps": [
+    {
+      "step": "step_1",
+      "status": "completed",
+      "timestamp": "2025-11-18T00:00:00.000Z",
+      "outputs": [
+        "ai-docs/project-scan-report.json",
+        "ai-docs/index.md",
+        "ai-docs/project-overview.md",
+        "ai-docs/source-tree-analysis.md"
+      ],
+      "summary": "Initial exhaustive scan completed and core documentation files generated."
+    }
+  ],
+  "current_step": "step_complete",
+  "findings": {
+    "project_classification": {
+      "repository_type": "monorepo-desktop-app",
+      "parts_count": 1,
+      "primary_language": "TypeScript/Rust",
+      "architecture_type": "Tauri desktop app with Next.js frontend"
+    },
+    "technology_stack": [
+      {
+        "part_id": "readest-app",
+        "tech_summary": "Next.js 15 React 18 frontend with Zustand state management and Tailwind CSS, bundled as a Tauri 2 desktop application (Rust backend in src-tauri)."
+      }
+    ],
+    "batches_completed": [
+      {
+        "path": "apps/readest-app/src",
+        "files_scanned": 1,
+        "summary": "Scanned application source tree layout and key feature modules."
+      },
+      {
+        "path": "apps/readest-app/src-tauri",
+        "files_scanned": 1,
+        "summary": "Scanned Tauri configuration and Rust entrypoint for desktop shell."
+      }
+    ]
+  },
+  "outputs_generated": [
+    "ai-docs/project-scan-report.json",
+    "ai-docs/index.md",
+    "ai-docs/project-overview.md",
+    "ai-docs/source-tree-analysis.md"
+  ],
+  "resume_instructions": "Documentation workflow completed for initial_scan; start deep_dive mode for targeted areas if needed.",
+  "validation_status": {
+    "last_validated": "2025-11-18T00:00:00.000Z",
+    "validation_errors": []
+  },
+  "deep_dive_targets": []
+}
+
