@@ -2,14 +2,14 @@
 
 import clsx from 'clsx';
 import * as React from 'react';
-import { useEffect, Suspense, useRef, useState } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useEnv } from '@/context/EnvContext';
 import { useTheme } from '@/hooks/useTheme';
+import { useLibrary } from '@/hooks/useLibrary';
 import { useThemeStore } from '@/store/themeStore';
 import { useReaderStore } from '@/store/readerStore';
-import { useLibraryStore } from '@/store/libraryStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useNotebookStore } from '@/store/notebookStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -51,17 +51,16 @@ Z-Index Layering Guide:
 
 const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   const router = useRouter();
-  const { envConfig, appService } = useEnv();
-  const { setLibrary } = useLibraryStore();
-  const { hoveredBookKey } = useReaderStore();
-  const { settings, setSettings } = useSettingsStore();
+  const { appService } = useEnv();
+  const { hoveredBookKey, getView } = useReaderStore();
+  const { settings } = useSettingsStore();
+  const { sideBarBookKey } = useSidebarStore();
   const { isSideBarVisible, getIsSideBarVisible, setSideBarVisible } = useSidebarStore();
   const { isNotebookVisible, getIsNotebookVisible, setNotebookVisible } = useNotebookStore();
   const { isDarkMode, systemUIAlwaysHidden, isRoundedWindow } = useThemeStore();
   const { showSystemUI, dismissSystemUI } = useThemeStore();
   const { acquireBackKeyInterception, releaseBackKeyInterception } = useDeviceControlStore();
-  const [libraryLoaded, setLibraryLoaded] = useState(false);
-  const isInitiating = useRef(false);
+  const { libraryLoaded } = useLibrary();
 
   useTheme({ systemUIVisible: settings.alwaysShowStatusBar, appThemeColor: 'base-100' });
   useScreenWakeLock(settings.screenWakeLock);
@@ -76,11 +75,14 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   }, []);
 
   const handleKeyDown = (event: CustomEvent) => {
+    const view = getView(sideBarBookKey!);
     if (event.detail.keyName === 'Back') {
       if (getIsSideBarVisible()) {
         setSideBarVisible(false);
       } else if (getIsNotebookVisible()) {
         setNotebookVisible(false);
+      } else if (view?.history.canGoBack) {
+        view.history.back();
       } else {
         eventDispatcher.dispatch('close-reader');
         router.back();
@@ -100,30 +102,16 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   }, [appService?.isAndroidApp]);
 
   useEffect(() => {
-    if (!appService?.isAndroidApp) return;
-    eventDispatcher.onSync('native-key-down', handleKeyDown);
+    if (appService?.isAndroidApp) {
+      eventDispatcher.onSync('native-key-down', handleKeyDown);
+    }
     return () => {
       if (appService?.isAndroidApp) {
         eventDispatcher.offSync('native-key-down', handleKeyDown);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appService?.isAndroidApp, isSideBarVisible, isNotebookVisible]);
-
-  useEffect(() => {
-    if (isInitiating.current) return;
-    isInitiating.current = true;
-    const initLibrary = async () => {
-      const appService = await envConfig.getAppService();
-      const settings = await appService.loadSettings();
-      setSettings(settings);
-      setLibrary(await appService.loadLibraryBooks());
-      setLibraryLoaded(true);
-    };
-
-    initLibrary();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [appService?.isAndroidApp, sideBarBookKey, isSideBarVisible, isNotebookVisible]);
 
   useEffect(() => {
     if (!appService?.isMobileApp) return;

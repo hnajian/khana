@@ -186,6 +186,9 @@ export const nativeFileSystem: FileSystem = {
     const content = await this.readFile(path, base, 'binary');
     return URL.createObjectURL(new Blob([content]));
   },
+  async getImageURL(path: string) {
+    return this.getURL(path);
+  },
   async openFile(path: string, base: BaseDir, name?: string) {
     const { fp, baseDir } = this.resolvePath(path, base);
     let fname = name || getFilename(fp);
@@ -224,8 +227,12 @@ export const nativeFileSystem: FileSystem = {
     }
   },
   async copyFile(srcPath: string, dstPath: string, base: BaseDir) {
-    if (!(await this.exists(getDirPath(dstPath), base))) {
-      await this.createDir(getDirPath(dstPath), base, true);
+    try {
+      if (!(await this.exists(getDirPath(dstPath), base))) {
+        await this.createDir(getDirPath(dstPath), base, true);
+      }
+    } catch (error) {
+      console.log('Failed to create directory for copying file:', error);
     }
     if (isContentURI(srcPath)) {
       const prefix = await this.getPrefix(base);
@@ -276,7 +283,7 @@ export const nativeFileSystem: FileSystem = {
   async removeFile(path: string, base: BaseDir) {
     const { fp, baseDir } = this.resolvePath(path, base);
 
-    return remove(fp, baseDir ? { baseDir } : undefined);
+    await remove(fp, baseDir ? { baseDir } : undefined);
   },
   async createDir(path: string, base: BaseDir, recursive = false) {
     const { fp, baseDir } = this.resolvePath(path, base);
@@ -397,12 +404,12 @@ export class NativeAppService extends BaseAppService {
     await this.runMigrations();
   }
 
-  private CURRENT_MIGRATION_VERSION = 20251029;
-
-  private async runMigrations() {
+  override async runMigrations() {
     try {
       const settings = await this.loadSettings();
       const lastMigrationVersion = settings.migrationVersion || 0;
+
+      await super.runMigrations(lastMigrationVersion);
 
       if (lastMigrationVersion < 20251029) {
         try {

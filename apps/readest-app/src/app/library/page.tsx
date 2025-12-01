@@ -49,6 +49,7 @@ import { BookMetadata } from '@/libs/document';
 import { AboutWindow } from '@/components/AboutWindow';
 import { BookDetailModal } from '@/components/metadata';
 import { UpdaterWindow } from '@/components/UpdaterWindow';
+import { CatalogDialog } from './components/OPDSDialog';
 import { MigrateDataWindow } from './components/MigrateDataWindow';
 import { useDragDropImport } from './hooks/useDragDropImport';
 import { Toast } from '@/components/Toast';
@@ -88,6 +89,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
   const { settings, setSettings, saveSettings } = useSettingsStore();
   const { isSettingsDialogOpen, setSettingsDialogOpen } = useSettingsStore();
+  const [showCatalogManager, setShowCatalogManager] = useState(false);
   const [loading, setLoading] = useState(false);
   const [libraryLoaded, setLibraryLoaded] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -142,6 +144,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       handleImportBooks();
     },
   });
+
+  useEffect(() => {
+    sessionStorage.setItem('lastLibraryParams', searchParams?.toString() || '');
+  }, [searchParams]);
 
   useEffect(() => {
     const doCheckAppUpdates = async () => {
@@ -614,6 +620,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     } else {
       params.delete('group');
     }
+    setIsSelectAll(false);
+    setIsSelectNone(false);
     navigateToLibrary(router, `${params.toString()}`);
     setTimeout(() => {
       setCurrentGroupPath(path);
@@ -637,7 +645,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       )}
     >
       <div
-        className='top-0 z-40 w-full'
+        className='relative top-0 z-40 w-full'
         role='banner'
         tabIndex={-1}
         aria-label={_('Library Header')}
@@ -646,9 +654,18 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           isSelectMode={isSelectMode}
           isSelectAll={isSelectAll}
           onImportBooks={handleImportBooks}
+          onOpenCatalogManager={() => setShowCatalogManager(true)}
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
+        />
+        <progress
+          className={clsx(
+            'progress progress-success absolute bottom-0 left-0 right-0 h-1 translate-y-[2px] transition-opacity duration-200 sm:translate-y-[4px]',
+            isSyncing ? 'opacity-100' : 'opacity-0',
+          )}
+          value={syncProgress * 100}
+          max='100'
         />
       </div>
       {(loading || isSyncing) && (
@@ -716,14 +733,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 paddingLeft: `${insets.left}px`,
               }}
             >
-              <progress
-                className={clsx(
-                  'progress progress-success absolute left-0 right-0 top-[2px] z-30 h-1 transition-opacity duration-200',
-                  isSyncing ? 'opacity-100' : 'opacity-0',
-                )}
-                value={syncProgress * 100}
-                max='100'
-              ></progress>
               <DropIndicator />
               <Bookshelf
                 libraryBooks={libraryBooks}
@@ -776,6 +785,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       <UpdaterWindow />
       <MigrateDataWindow />
       {isSettingsDialogOpen && <SettingsDialog bookKey={''} />}
+      {showCatalogManager && <CatalogDialog onClose={() => setShowCatalogManager(false)} />}
       <Toast />
     </div>
   );
