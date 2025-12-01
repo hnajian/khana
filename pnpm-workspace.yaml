@@ -3,4 +3,7 @@ packages:
   - packages/foliate-js
 
 onlyBuiltDependencies:
+  - core-js
+  - esbuild
   - sharp
+  - workerd
