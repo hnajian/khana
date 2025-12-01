@@ -30,9 +30,6 @@
       "@pdfjs/*": [
         "./public/vendor/pdfjs/*"
       ],
-      "@simplecc/*": [
-        "./public/vendor/simplecc/*"
-      ]
     }
   },
   "include": [

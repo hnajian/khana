@@ -159,7 +159,6 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         await updateToc(
           bookDoc,
           config.viewSettings?.sortedTOC ?? false,
-          config.viewSettings?.convertChineseVariant ?? 'none',
         );
         if (!bookDoc.metadata.title) {
           bookDoc.metadata.title = getBaseFilename(file.name);

@@ -1,6 +1,4 @@
-import { ConvertChineseVariant } from '@/types/book';
 import { SectionItem, TOCItem, CFI, BookDoc } from '@/libs/document';
-import { simplecc, initSimpleCC } from '@/utils/simplecc';
 
 export const findParentPath = (toc: TOCItem[], href: string): TOCItem[] => {
   for (const item of toc) {
@@ -42,15 +40,10 @@ export const findTocItemBS = (toc: TOCItem[], cfi: string): TOCItem | null => {
 export const updateToc = async (
   bookDoc: BookDoc,
   sortedTOC: boolean,
-  convertChineseVariant: ConvertChineseVariant,
 ) => {
   const items = bookDoc?.toc || [];
   if (!items.length) return;
 
-  if (convertChineseVariant && convertChineseVariant !== 'none') {
-    await initSimpleCC();
-    convertTocLabels(items, convertChineseVariant);
-  }
 
   const sections = bookDoc?.sections || [];
   if (!sections.length) return;
@@ -82,17 +75,6 @@ export const updateToc = async (
   if (sortedTOC) {
     sortTocItems(items);
   }
-};
-
-const convertTocLabels = (items: TOCItem[], convertChineseVariant: ConvertChineseVariant) => {
-  items.forEach((item) => {
-    if (item.label) {
-      item.label = simplecc(item.label, convertChineseVariant);
-    }
-    if (item.subitems) {
-      convertTocLabels(item.subitems, convertChineseVariant);
-    }
-  });
 };
 
 const updateTocData = (

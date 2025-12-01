@@ -66,7 +66,7 @@ jobs:
       - name: install Dependencies
         working-directory: apps/readest-app
         run: |
-          pnpm install && pnpm setup-vendors
+          pnpm install && pnpm setup-pdfjs
 
       - name: run tests
         working-directory: apps/readest-app
