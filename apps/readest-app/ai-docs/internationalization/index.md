@@ -15,19 +15,6 @@ Readest supports 15 languages with full translation coverage:
 | Language | Code | Status | Added |
 |----------|------|--------|-------|
 | English | `en` | Default/Fallback | Initial |
-| German | `de` | ✅ Complete | v0.9.0 |
-| Spanish | `es` | ✅ Complete | v0.9.0 |
-| French | `fr` | ✅ Complete | v0.9.0 |
-| Italian | `it` | ✅ Complete | v0.9.0 |
-| Japanese | `ja` | ✅ Complete | v0.9.0 |
-| Korean | `ko` | ✅ Complete | v0.9.0 |
-| Portuguese | `pt` | ✅ Complete | v0.9.0 |
-| Russian | `ru` | ✅ Complete | v0.9.0 |
-| Turkish | `tr` | ✅ Complete | v0.9.0 |
-| Vietnamese | `vi` | ✅ Complete | v0.9.0 |
-| Indonesian | `id` | ✅ Complete | v0.9.0 |
-| Chinese (Simplified) | `zh-CN` | ✅ Complete | v0.9.0 |
-| Chinese (Traditional) | `zh-TW` | ✅ Complete | v0.9.0 |
 | **Arabic** | `ar` | ✅ Complete | **v0.9.15** (#432) |
 
 ### Additional Fallback Support
@@ -55,7 +42,7 @@ Arabic is the first RTL language supported in Readest. The UI automatically adju
 
 **Future RTL Languages**: Hebrew and other RTL languages can be added following the same pattern established for Arabic.
 
-**Detailed Documentation**: See **[RTL and Arabic Language Support](./rtl-arabic.md)** for comprehensive RTL implementation details, supported languages, UI direction switching, typography considerations, and AI agent modification guidelines.
+**Detailed Documentation**: See **[RTL and Arabic Language Support](./rtl-arabic/index.md)** for comprehensive RTL implementation details, supported languages, UI direction switching, typography considerations, and AI agent modification guidelines.
 
 ## Architecture
 
@@ -76,18 +63,6 @@ apps/readest-app/
 ├── public/locales/              # Translation files
 │   ├── de/translation.json
 │   ├── en/translation.json
-│   ├── es/translation.json
-│   ├── fr/translation.json
-│   ├── id/translation.json
-│   ├── it/translation.json
-│   ├── ja/translation.json
-│   ├── ko/translation.json
-│   ├── pt/translation.json
-│   ├── ru/translation.json
-│   ├── tr/translation.json
-│   ├── vi/translation.json
-│   ├── zh-CN/translation.json
-│   └── zh-TW/translation.json
 ├── src/
 │   ├── i18n/
 │   │   └── i18n.ts             # i18next initialization
