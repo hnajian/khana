@@ -33,7 +33,7 @@ async function handleRequest(request: NextRequest, method: 'GET' | 'HEAD') {
     console.log(`[OPDS Proxy] ${method}: ${url}`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
     const headers: HeadersInit = {
       'User-Agent': 'Readest/1.0 (OPDS Browser)',
       Accept: 'application/atom+xml, application/xml, text/xml, application/json, */*',
@@ -54,7 +54,6 @@ async function handleRequest(request: NextRequest, method: 'GET' | 'HEAD') {
     if (!response.ok) {
       console.error(`[OPDS Proxy] HTTP ${response.status} for ${url}`);
       if (method === 'HEAD') {
-        console.log(`[OPDS Proxy] Response headers:`, response.headers);
         if (response.status === 401) {
           return new NextResponse(null, {
             status: 403,
@@ -83,7 +82,16 @@ async function handleRequest(request: NextRequest, method: 'GET' | 'HEAD') {
           },
         });
       }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      return new NextResponse(data, {
+        status: response.status,
+        headers: {
+          ...Object.fromEntries(response.headers.entries()),
+          'Cache-Control': 'public, max-age=300',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      });
     }
 
     const contentType = response.headers.get('Content-Type') || 'text/xml';
@@ -111,7 +119,7 @@ async function handleRequest(request: NextRequest, method: 'GET' | 'HEAD') {
         status: 200,
         headers: {
           'Content-Type': contentType,
-          'Content-Length': contentLength || '',
+          'X-Content-Length': contentLength || '',
           'Cache-Control': 'public, max-age=300',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',

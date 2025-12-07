@@ -34,6 +34,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useUICSS } from '@/hooks/useUICSS';
 import { useDemoBooks } from './hooks/useDemoBooks';
 import { useBooksSync } from './hooks/useBooksSync';
+import { useBookDataStore } from '@/store/bookDataStore';
 import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
 import { useOpenWithBooks } from '@/hooks/useOpenWithBooks';
 import { SelectedFile, useFileSelector } from '@/hooks/useFileSelector';
@@ -87,6 +88,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const _ = useTranslation();
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
+  const { clearBookData } = useBookDataStore();
   const { settings, setSettings, saveSettings } = useSettingsStore();
   const { isSettingsDialogOpen, setSettingsDialogOpen } = useSettingsStore();
   const [showCatalogManager, setShowCatalogManager] = useState(false);
@@ -531,6 +533,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       try {
         await appService?.deleteBook(book, deleteAction);
         await updateBook(envConfig, book);
+        clearBookData(book.hash);
         if (syncBooks) pushLibrary();
         eventDispatcher.dispatch('toast', {
           type: 'info',
@@ -629,7 +632,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   };
 
   if (!appService || !insets || checkOpenWithBooks || checkLastOpenBooks) {
-    return <div className={clsx('h-[100vh]', !appService?.isLinuxApp && 'bg-base-200')} />;
+    return <div className={clsx('full-height', !appService?.isLinuxApp && 'bg-base-200')} />;
   }
 
   const showBookshelf = libraryLoaded || libraryBooks.length > 0;
@@ -639,7 +642,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       ref={pageRef}
       aria-label='Your Library'
       className={clsx(
-        'library-page text-base-content flex h-[100vh] select-none flex-col overflow-hidden',
+        'library-page text-base-content full-height flex select-none flex-col overflow-hidden',
         viewSettings?.isEink ? 'bg-base-100' : 'bg-base-200',
         appService?.hasRoundedWindow && isRoundedWindow && 'window-border rounded-window',
       )}
@@ -793,7 +796,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
 const LibraryPage = () => {
   return (
-    <Suspense fallback={<div className='h-[100vh]' />}>
+    <Suspense fallback={<div className='full-height' />}>
       <LibraryPageWithSearchParams />
     </Suspense>
   );

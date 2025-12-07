@@ -5,13 +5,14 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IoPricetag } from 'react-icons/io5';
 import { Book } from '@/types/book';
-import { groupByArray } from './utils/opdsUtils';
+import { OPDSLink, OPDSPublication, REL, SYMBOL } from '@/types/opds';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getFileExtFromMimeType } from '@/libs/document';
 import { formatDate, formatLanguage } from '@/utils/book';
 import { eventDispatcher } from '@/utils/event';
 import { navigateToReader } from '@/utils/nav';
 import { CachedImage } from '@/components/CachedImage';
-import { OPDSLink, OPDSPublication, REL, SYMBOL } from '@/types/opds';
+import { groupByArray } from '../utils/opdsUtils';
 import Dropdown from '@/components/Dropdown';
 import MenuItem from '@/components/MenuItem';
 
@@ -190,7 +191,11 @@ export function PublicationView({
                             key={idx}
                             noIcon
                             transient
-                            label={link.title || link.type || ''}
+                            label={
+                              link.title ||
+                              getFileExtFromMimeType(link.type || '').toUpperCase() ||
+                              idx.toString()
+                            }
                             onClick={() => handleActionButton(link.href, link.type)}
                           />
                         ))}
@@ -202,8 +207,15 @@ export function PublicationView({
               <div className='flex h-12 w-12 items-center justify-center'>
                 {downloading && progress && progress > 0 && (
                   <div
-                    className='radial-progress flex items-center justify-center text-xs'
-                    style={{ '--value': progress, '--size': '2.5rem' } as React.CSSProperties}
+                    className='radial-progress flex items-center justify-center'
+                    style={
+                      {
+                        '--value': progress,
+                        '--size': '2.5rem',
+                        fontSize: '0.6rem',
+                        lineHeight: '0.8rem',
+                      } as React.CSSProperties
+                    }
                     aria-valuenow={progress || 0}
                     role='progressbar'
                   >

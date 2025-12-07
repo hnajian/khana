@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { CatalogManager } from '@/app/opds/CatelogManager';
+import { CatalogManager } from '@/app/opds/components/CatelogManager';
 import { useTranslation } from '@/hooks/useTranslation';
 import Dialog from '@/components/Dialog';
 
@@ -12,7 +12,7 @@ export function CatalogDialog({ onClose }: CatalogDialogProps) {
   return (
     <Dialog
       isOpen={true}
-      title={_('OPDS Catalog')}
+      title={_('Online Library')}
       onClose={onClose}
       bgClassName={'sm:!bg-black/75'}
       boxClassName='sm:min-w-[520px] sm:w-3/4 sm:h-[85%] sm:!max-w-screen-sm'
